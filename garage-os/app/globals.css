@@ -1,0 +1,245 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-sans: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0a0a0f; }
+::-webkit-scrollbar-thumb { background: #252532; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #e8a800; }
+
+/* ─── Selection ─────────────────────────────────────── */
+::selection { background: rgba(232, 168, 0, 0.3); color: #f5c842; }
+
+/* ─── Base ───────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: #0a0a0f;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(232, 168, 0, 0.06) 0%, transparent 60%);
+}
+
+/* ─── Typography ─────────────────────────────────────── */
+.font-display { font-family: var(--font-display); }
+
+h1, h2 { font-family: var(--font-display); }
+
+/* ─── Carbon Fiber ───────────────────────────────────── */
+.carbon-bg {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.015) 2px,
+      rgba(255,255,255,0.015) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.015) 2px,
+      rgba(255,255,255,0.015) 4px
+    );
+}
+
+/* ─── Glass Card ─────────────────────────────────────── */
+.glass-card {
+  background: rgba(24, 24, 32, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-card-hover {
+  transition: all 0.25s ease;
+}
+.glass-card-hover:hover {
+  background: rgba(30, 30, 40, 0.9);
+  border-color: rgba(232, 168, 0, 0.2);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(232, 168, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* ─── Amber Accent Line ──────────────────────────────── */
+.accent-line {
+  position: relative;
+}
+.accent-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 70%;
+  background: linear-gradient(to bottom, #e8a800, #d4960a);
+  border-radius: 2px;
+}
+
+/* ─── Input ──────────────────────────────────────────── */
+.input-dark {
+  background: rgba(10, 10, 15, 0.8);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #e8e8f0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.input-dark:focus {
+  outline: none;
+  border-color: rgba(232, 168, 0, 0.5);
+  box-shadow: 0 0 0 3px rgba(232, 168, 0, 0.08);
+}
+.input-dark::placeholder { color: #555560; }
+
+/* ─── Button Styles ──────────────────────────────────── */
+.btn-amber {
+  background: linear-gradient(135deg, #e8a800, #d4960a);
+  color: #050507;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  transition: all 0.2s ease;
+}
+.btn-amber:hover {
+  background: linear-gradient(135deg, #f5c842, #e8a800);
+  box-shadow: 0 0 20px rgba(232, 168, 0, 0.4);
+  transform: translateY(-1px);
+}
+.btn-amber:active { transform: translateY(0); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #c8c8d0;
+  transition: all 0.2s ease;
+}
+.btn-ghost:hover {
+  border-color: rgba(232, 168, 0, 0.3);
+  color: #e8a800;
+  background: rgba(232, 168, 0, 0.05);
+}
+
+/* ─── Status Badge ───────────────────────────────────── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+/* ─── Sidebar Nav ────────────────────────────────────── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: #888896;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+}
+.nav-item:hover {
+  color: #c8c8d0;
+  background: rgba(255,255,255,0.04);
+}
+.nav-item.active {
+  color: #e8a800;
+  background: rgba(232, 168, 0, 0.08);
+}
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: #e8a800;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ─── Table ──────────────────────────────────────────── */
+.data-table th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #555560;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.data-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 14px;
+  color: #c8c8d0;
+}
+.data-table tr:hover td { background: rgba(255,255,255,0.02); }
+.data-table tr:last-child td { border-bottom: none; }
+
+/* ─── Gauge / Progress ───────────────────────────────── */
+.gauge-track {
+  height: 4px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.gauge-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #e8a800, #f5c842);
+  transition: width 0.6s ease;
+}
+
+/* ─── Shimmer Skeleton ───────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+/* ─── Chart overrides ────────────────────────────────── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(255,255,255,0.04) !important;
+}
+.recharts-text { fill: #555560 !important; font-size: 12px !important; }
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #111118 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 8px !important;
+}
+
+/* ─── Page transitions ───────────────────────────────── */
+.page-enter {
+  animation: slide-up 0.35s ease-out both;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0;  }
+}
