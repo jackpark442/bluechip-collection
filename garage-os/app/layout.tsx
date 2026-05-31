@@ -22,7 +22,7 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Garage OS — Fleet Management',
+  title: 'Bluechip Collection — Fleet Management',
   description: 'Premium vehicle collection management platform',
   icons: { icon: '/favicon.ico' },
 };

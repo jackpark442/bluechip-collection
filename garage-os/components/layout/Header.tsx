@@ -25,7 +25,7 @@ export default function Header() {
 
   const title = Object.entries(PAGE_TITLES).find(([path]) =>
     pathname === path || pathname.startsWith(path + '/')
-  )?.[1] || 'Garage OS';
+  )?.[1] || 'Bluechip Collection';
 
   useEffect(() => {
     const supabase = createClient();

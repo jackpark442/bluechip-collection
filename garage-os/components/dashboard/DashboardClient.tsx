@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Car, Shield, TrendingUp, AlertTriangle, CheckCircle, Clock, Wrench, ChevronRight, Plus } from 'lucide-react';
+import { Car, Shield, TrendingUp, CheckCircle, Wrench, ChevronRight, Plus, MapPin } from 'lucide-react';
 import type { FleetOverview, Reminder, MaintenanceRecord } from '@/types';
 import { formatCurrency, formatDate, daysUntil, getExpiryStatus, CATEGORY_LABELS, STATUS_LABELS, getVehicleDisplayName } from '@/lib/utils';
 
@@ -287,6 +287,12 @@ function VehicleCard({ vehicle: v }: { vehicle: FleetOverview }) {
         <div className="absolute bottom-3 left-4">
           <div className="font-display text-base font-bold text-chrome-bright">{v.make} {v.model}</div>
           <div className="text-xs text-chrome-dim">{v.year}{v.registration ? ` · ${v.registration.toUpperCase()}` : ''}</div>
+          {(v as any).location_name && (
+            <div className="flex items-center gap-1 mt-1">
+              <MapPin className="w-3 h-3 text-amber-DEFAULT" />
+              <span className="text-[10px] text-amber-DEFAULT/80">{(v as any).location_name}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -324,14 +330,4 @@ function EmptyState({ message }: { message: string }) {
       <p className="text-sm text-chrome-dim">{message}</p>
     </div>
   );
-}
-
-function getExpiryStatus(dateStr?: string) {
-  if (!dateStr) return 'unknown';
-  const days = daysUntil(dateStr);
-  if (days === null) return 'unknown';
-  if (days < 0) return 'expired';
-  if (days <= 7) return 'critical';
-  if (days <= 30) return 'warning';
-  return 'ok';
 }

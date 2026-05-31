@@ -5,13 +5,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard, Car, Bell, TrendingUp, Search,
-  Settings, LogOut, Shield, ChevronRight, Gauge
+  Settings, LogOut, Shield, ChevronRight, Gauge, Map
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/dashboard',  label: 'Dashboard',   icon: LayoutDashboard },
   { href: '/vehicles',   label: 'Fleet',        icon: Car },
+  { href: '/map',        label: 'Map',          icon: Map },
   { href: '/reminders',  label: 'Reminders',    icon: Bell },
   { href: '/valuation',  label: 'Valuation',    icon: TrendingUp },
   { href: '/search',     label: 'Search',       icon: Search },
@@ -39,8 +40,8 @@ export default function Sidebar() {
           <Shield className="w-5 h-5 text-obsidian-900" />
         </div>
         <div>
-          <div className="font-display text-base font-bold text-chrome-bright tracking-wide">GARAGE OS</div>
-          <div className="text-[10px] text-chrome-muted tracking-[0.12em] uppercase">Fleet Command</div>
+          <div className="font-display text-base font-bold text-chrome-bright tracking-wide">BLUECHIP</div>
+          <div className="text-[10px] text-chrome-muted tracking-[0.12em] uppercase">Collection</div>
         </div>
       </div>
 

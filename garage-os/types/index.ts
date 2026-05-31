@@ -50,6 +50,10 @@ export interface Vehicle {
   last_valued_date?: string;
   cover_image_url?: string;
   notes?: string;
+  location_name?: string;
+  location_address?: string;
+  location_lat?: number;
+  location_lng?: number;
   created_at: string;
   updated_at: string;
 }

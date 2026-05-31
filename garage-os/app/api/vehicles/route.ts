@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createRouteClient as createClient } from '@/lib/supabase/route-client';
 
 // GET /api/vehicles — list all vehicles for the logged-in user
 export async function GET() {

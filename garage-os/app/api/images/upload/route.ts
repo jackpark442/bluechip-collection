@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createRouteClient } from '@/lib/supabase/route-client';
 
 // POST /api/images/upload
 // multipart/form-data: vehicleId, file, caption?, isCover?
 export async function POST(request: NextRequest) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const supabase = createRouteClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  console.log('[upload] user:', user?.id, 'authError:', authError?.message);
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
 
   const formData = await request.formData();
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
     .from('vehicle-images')
     .upload(storagePath, arrayBuffer, { contentType: file.type, upsert: false });
 
+  console.log('[upload] storage error:', uploadError?.message);
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
 
   const { data: { publicUrl } } = supabase.storage
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE /api/images/upload?imageId=xxx
 export async function DELETE(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = createRouteClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
 

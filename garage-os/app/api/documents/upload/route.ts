@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createRouteClient as createClient } from '@/lib/supabase/route-client';
 
 // POST /api/documents/upload
 // multipart/form-data: vehicleId, category, title, file

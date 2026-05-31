@@ -5,7 +5,10 @@ import DashboardClient from '@/components/dashboard/DashboardClient';
 
 export default async function DashboardPage() {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const allCookies = (await import('next/headers')).cookies();
+  console.log('[dashboard] user:', user?.email, 'error:', userError?.message);
+  console.log('[dashboard] cookies:', allCookies.getAll().map(c => c.name));
   if (!user) redirect('/auth/login');
 
   // Fetch fleet overview

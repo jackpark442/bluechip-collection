@@ -65,7 +65,7 @@ export default function RegisterPage() {
             style={{ background: 'linear-gradient(135deg, #e8a800, #d4960a)' }}>
             <Shield className="w-8 h-8 text-obsidian-900" />
           </div>
-          <h1 className="font-display text-3xl font-bold text-chrome-bright">GARAGE OS</h1>
+          <h1 className="font-display text-3xl font-bold text-chrome-bright">BLUECHIP</h1>
           <p className="text-chrome-dim mt-2 text-sm tracking-[0.08em] uppercase">Create Your Fleet</p>
         </div>
 

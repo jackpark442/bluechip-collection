@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   Car, Shield, FileText, Wrench, Camera, TrendingUp, Bell,
   Edit2, Trash2, ChevronLeft, Plus, ExternalLink, Download,
-  CheckCircle, AlertTriangle, AlertCircle, Clock
+  CheckCircle, AlertTriangle, AlertCircle, Clock, MapPin
 } from 'lucide-react';
 import type {
   Vehicle, VehicleImage, MotRecord, InsurancePolicy, VehicleTax,
@@ -18,6 +18,7 @@ import {
   getExpiryBadgeColor, CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS,
   SERVICE_TYPE_LABELS, DOCUMENT_CATEGORY_LABELS, getVehicleDisplayName, formatFileSize
 } from '@/lib/utils';
+import MarketPricePanel from './MarketPricePanel';
 import AddMotModal from './modals/AddMotModal';
 import AddInsuranceModal from './modals/AddInsuranceModal';
 import AddTaxModal from './modals/AddTaxModal';
@@ -166,7 +167,7 @@ export default function VehicleProfile(props: Props) {
 
       {/* Tab content */}
       <div className="min-h-[400px]">
-        {tab === 'overview' && <OverviewTab vehicle={vehicle} reminders={reminders} />}
+        {tab === 'overview' && <OverviewTab vehicle={vehicle} reminders={reminders} onRefresh={refresh} />}
         {tab === 'compliance' && (
           <ComplianceTab motRecords={motRecords} insurance={insurance} taxRecords={taxRecords}
             onAddMot={() => setShowAddMot(true)} onAddIns={() => setShowAddIns(true)} onAddTax={() => setShowAddTax(true)}
@@ -182,7 +183,7 @@ export default function VehicleProfile(props: Props) {
           <ImageGallery images={images} vehicleId={vehicle.id} onRefresh={refresh} />
         )}
         {tab === 'valuation' && (
-          <ValuationTab valuations={valuations} vehicle={vehicle} onRefresh={refresh} />
+          <ValuationTab valuations={valuations} vehicle={vehicle} maintenance={maintenance} onRefresh={refresh} />
         )}
       </div>
 
@@ -234,7 +235,7 @@ function ComplianceCard({ label, status, date, days, onAdd, provider, exempt }: 
 }
 
 // ─── Overview Tab ─────────────────────────────────────────
-function OverviewTab({ vehicle: v, reminders }: { vehicle: Vehicle; reminders: Reminder[] }) {
+function OverviewTab({ vehicle: v, reminders, onRefresh }: { vehicle: Vehicle; reminders: Reminder[]; onRefresh: () => void }) {
   const specs = [
     { label: 'Engine', value: v.engine_size_cc ? `${(v.engine_size_cc / 1000).toFixed(1)}L` : null },
     { label: 'Power', value: v.horsepower ? `${v.horsepower} hp` : null },
@@ -307,9 +308,86 @@ function OverviewTab({ vehicle: v, reminders }: { vehicle: Vehicle; reminders: R
             <p className="text-sm text-chrome-dim leading-relaxed whitespace-pre-wrap">{v.notes}</p>
           </div>
         )}
+
+        <LocationCard vehicle={v} onRefresh={onRefresh} />
       </div>
     </div>
   );
+}
+
+// ─── Location Card ────────────────────────────────────────
+function LocationCard({ vehicle, onRefresh }: { vehicle: Vehicle; onRefresh: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [location, setLocation] = useState<{ name: string; address: string; lat: number; lng: number } | null>(
+    vehicle.location_lat && vehicle.location_lng ? {
+      name: (vehicle as any).location_name || '',
+      address: (vehicle as any).location_address || '',
+      lat: (vehicle as any).location_lat,
+      lng: (vehicle as any).location_lng,
+    } : null
+  );
+
+  async function saveLocation() {
+    setSaving(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('vehicles').update({
+      location_name: location?.name || null,
+      location_address: location?.address || null,
+      location_lat: location?.lat || null,
+      location_lng: location?.lng || null,
+    }).eq('id', vehicle.id).eq('owner_id', user.id);
+    setSaving(false);
+    setEditing(false);
+    onRefresh();
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-display text-base text-chrome-bright">Location</h3>
+        <button onClick={() => setEditing(!editing)}
+          className="btn-ghost rounded-lg px-3 py-1.5 text-xs flex items-center gap-1.5">
+          <MapPin className="w-3.5 h-3.5" />
+          {editing ? 'Cancel' : location ? 'Edit' : 'Set Location'}
+        </button>
+      </div>
+
+      {editing ? (
+        <div className="space-y-3">
+          <LocationPickerDynamic value={location} onChange={setLocation} />
+          <button onClick={saveLocation} disabled={saving || !location}
+            className="btn-amber rounded-lg px-4 py-2 text-sm w-full disabled:opacity-50">
+            {saving ? 'Saving...' : 'Save Location'}
+          </button>
+        </div>
+      ) : location ? (
+        <div className="flex items-start gap-3">
+          <MapPin className="w-4 h-4 text-amber-DEFAULT shrink-0 mt-0.5" />
+          <div>
+            <div className="text-sm text-chrome-bright font-medium">{location.name}</div>
+            <div className="text-xs text-chrome-dim mt-0.5">{location.address}</div>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-chrome-dim">No location set — click "Set Location" to add one.</p>
+      )}
+    </div>
+  );
+}
+
+// Lazy load LocationPicker to avoid SSR issues with mapbox
+function LocationPickerDynamic(props: any) {
+  const [mounted, setMounted] = useState(false);
+  const [Component, setComponent] = useState<any>(null);
+  useState(() => {
+    setMounted(true);
+    import('./LocationPicker').then(m => setComponent(() => m.default));
+  });
+  if (!mounted || !Component) return <div className="text-sm text-chrome-dim py-4 text-center">Loading map...</div>;
+  return <Component {...props} />;
 }
 
 // ─── Compliance Tab ───────────────────────────────────────
@@ -527,12 +605,17 @@ function DocumentsTab({ documents, onAdd }: { documents: Document[]; onAdd: () =
 }
 
 // ─── Valuation Tab ────────────────────────────────────────
-function ValuationTab({ valuations, vehicle, onRefresh }: { valuations: Valuation[]; vehicle: Vehicle; onRefresh: () => void }) {
+function ValuationTab({ valuations, vehicle, maintenance, onRefresh }: { valuations: Valuation[]; vehicle: Vehicle; maintenance: MaintenanceRecord[]; onRefresh: () => void }) {
   const supabase = createClient();
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState('');
   const [source, setSource] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const totalMaintenance = maintenance.reduce((s, r) => s + (r.total_cost || 0), 0);
+  const totalInvested = (vehicle.purchase_price || 0) + totalMaintenance;
+  const gainLoss = vehicle.current_value && totalInvested ? vehicle.current_value - totalInvested : null;
+  const roi = gainLoss !== null && totalInvested > 0 ? (gainLoss / totalInvested) * 100 : null;
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -552,24 +635,51 @@ function ValuationTab({ valuations, vehicle, onRefresh }: { valuations: Valuatio
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
           <div className="text-sm text-chrome-dim">Current estimated value</div>
           <div className="font-display text-3xl text-amber-DEFAULT mt-1">{formatCurrency(vehicle.current_value)}</div>
-          {vehicle.purchase_price && (
-            <div className="text-sm text-chrome-dim mt-1">
-              Purchase: {formatCurrency(vehicle.purchase_price)} ·
-              <span className={vehicle.current_value && vehicle.current_value > vehicle.purchase_price ? ' text-emerald-400' : ' text-red-400'}>
-                {vehicle.current_value && vehicle.purchase_price ?
-                  ` ${vehicle.current_value > vehicle.purchase_price ? '+' : ''}${formatCurrency(vehicle.current_value - vehicle.purchase_price)}` : ''}
-              </span>
-            </div>
-          )}
         </div>
         <button onClick={() => setAdding(!adding)} className="btn-ghost rounded-lg px-4 py-2 text-sm flex items-center gap-2">
           <Plus className="w-4 h-4" /> Record Valuation
         </button>
       </div>
+
+      {/* ROI breakdown */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="glass-card rounded-lg p-4 bg-white/2">
+          <div className="text-[10px] text-chrome-muted uppercase tracking-wider mb-1">Purchase Price</div>
+          <div className="font-display text-lg text-chrome-bright">{formatCurrency(vehicle.purchase_price)}</div>
+        </div>
+        <div className="glass-card rounded-lg p-4 bg-white/2">
+          <div className="text-[10px] text-chrome-muted uppercase tracking-wider mb-1">Maintenance Spend</div>
+          <div className="font-display text-lg text-chrome-bright">{formatCurrency(totalMaintenance)}</div>
+          <div className="text-xs text-chrome-dim mt-0.5">{maintenance.length} records</div>
+        </div>
+        <div className="glass-card rounded-lg p-4 bg-white/2">
+          <div className="text-[10px] text-chrome-muted uppercase tracking-wider mb-1">Total Invested</div>
+          <div className="font-display text-lg text-chrome-bright">{formatCurrency(totalInvested)}</div>
+        </div>
+      </div>
+
+      {gainLoss !== null && (
+        <div className={`rounded-xl p-4 flex items-center justify-between ${gainLoss >= 0 ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+          <div>
+            <div className="text-xs uppercase tracking-wider mb-1 text-chrome-dim">True Gain / Loss after all costs</div>
+            <div className={`font-display text-2xl ${gainLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {gainLoss >= 0 ? '+' : ''}{formatCurrency(gainLoss)}
+            </div>
+          </div>
+          {roi !== null && (
+            <div className="text-right">
+              <div className="text-xs text-chrome-dim mb-1">ROI</div>
+              <div className={`font-display text-3xl font-bold ${roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {adding && (
         <form onSubmit={handleAdd} className="glass-card rounded-xl p-5 space-y-4">
@@ -592,6 +702,15 @@ function ValuationTab({ valuations, vehicle, onRefresh }: { valuations: Valuatio
           </div>
         </form>
       )}
+
+      <MarketPricePanel
+        make={vehicle.make}
+        model={vehicle.model}
+        year={vehicle.year}
+        currentValue={vehicle.current_value}
+        vehicleId={vehicle.id}
+        onValueUpdate={onRefresh}
+      />
 
       {valuations.length > 0 ? (
         <div className="glass-card rounded-xl overflow-hidden">

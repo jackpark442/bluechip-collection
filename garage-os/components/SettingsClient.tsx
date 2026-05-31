@@ -85,7 +85,7 @@ export default function SettingsClient({ user, profile }: Props) {
 
       <Section title="DVSA MOT API" icon={<Shield className="w-4 h-4" />}>
         <div className="space-y-3 text-sm text-chrome-dim">
-          <p>Garage OS uses the official DVSA MOT History API to automatically import MOT records.</p>
+          <p>Bluechip Collection uses the official DVSA MOT History API to automatically import MOT records.</p>
           <p>To enable this feature, you need to register for API access:</p>
           <ol className="list-decimal list-inside space-y-1 text-chrome-dim">
             <li>Visit <a href="https://documentation.history.mot.api.gov.uk/mot-history-api/register" target="_blank" className="text-amber-DEFAULT hover:text-amber-light">documentation.history.mot.api.gov.uk</a></li>

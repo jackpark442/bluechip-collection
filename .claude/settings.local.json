@@ -6,7 +6,14 @@
       "Bash(git --version)",
       "Bash(git -C \"C:\\\\Users\\\\Welcome\\\\OneDrive\\\\Desktop\\\\Bluechip Collection\" status)",
       "PowerShell(gh --version 2>&1)",
-      "PowerShell(git -C \"C:\\\\Users\\\\Welcome\\\\OneDrive\\\\Desktop\\\\Bluechip Collection\" rev-parse --show-toplevel 2>&1)"
+      "PowerShell(git -C \"C:\\\\Users\\\\Welcome\\\\OneDrive\\\\Desktop\\\\Bluechip Collection\" rev-parse --show-toplevel 2>&1)",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\GitHub CLI\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:LOCALAPPDATA\\\\Programs\\\\GitHub CLI\" -ErrorAction SilentlyContinue)",
+      "Bash(npm install *)",
+      "WebFetch(domain:www.googleapis.com)",
+      "WebFetch(domain:www.pistonheads.com)",
+      "WebFetch(domain:www.carandclassic.com)",
+      "WebFetch(domain:www.autotrader.co.uk)",
+      "Bash(powershell -Command 'Get-ChildItem -Recurse app/api -Filter route.ts | Where-Object { Select-String -Path $_.FullName -Pattern '\\\\''supabase/server'\\\\'' -Quiet } | ForEach-Object { \\(Get-Content $_.FullName\\) -replace \"import \\\\{ createClient \\\\} from '\\\\''@/lib/supabase/server'\\\\'';\", \"import { createRouteClient as createClient } from '\\\\''@/lib/supabase/route-client'\\\\'';\" | Set-Content $_.FullName; Write-Host $_.FullName }')"
     ]
   }
 }
