@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Upload, Trash2, Star, Loader2, X, ZoomIn, Camera } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 import type { VehicleImage } from '@/types';
 
 interface Props {
@@ -18,7 +19,6 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
   const [lightbox, setLightbox] = useState<VehicleImage | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
 
-  // Refs for the two file inputs (gallery + camera)
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -26,28 +26,47 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
     if (files.length === 0) return;
     setUploading(true);
     setUploadError('');
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setUploadError('Not logged in'); setUploading(false); return; }
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       setUploadProgress(`Uploading ${i + 1} of ${files.length}…`);
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('vehicleId', vehicleId);
-      formData.append('isCover', images.length === 0 && i === 0 ? 'true' : 'false');
+      // Upload directly from browser to Supabase Storage — no Vercel size limit
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = `${user.id}/${vehicleId}/${Date.now()}-${safeName}`;
 
-      try {
-        const res = await fetch('/api/images/upload', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (!res.ok) {
-          setUploadError(data.error ?? 'Upload failed');
-          break;
-        }
-        setImages(prev => [...prev, data]);
-      } catch (err) {
-        setUploadError('Network error — please try again');
+      const { error: storageError } = await supabase.storage
+        .from('vehicle-images')
+        .upload(storagePath, file, { contentType: file.type || 'image/jpeg', upsert: false });
+
+      if (storageError) {
+        setUploadError(`Upload failed: ${storageError.message}`);
         break;
       }
+
+      const { data: { publicUrl } } = supabase.storage.from('vehicle-images').getPublicUrl(storagePath);
+      const isCover = images.length === 0 && i === 0;
+
+      // Record in database via lightweight API call
+      const res = await fetch('/api/images/record', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ vehicleId, storagePath, publicUrl, isCover }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setUploadError(data.error ?? 'Failed to save image record');
+        // Clean up the uploaded file
+        await supabase.storage.from('vehicle-images').remove([storagePath]);
+        break;
+      }
+
+      const newImage = await res.json();
+      setImages(prev => [...prev, newImage]);
     }
 
     setUploading(false);
@@ -55,23 +74,19 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
     onRefresh();
   }
 
-  // Drag-and-drop handlers
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragActive(true);
-  }, []);
-  const onDragLeave = useCallback(() => setIsDragActive(false), []);
-  const onDrop = useCallback((e: React.DragEvent) => {
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length) uploadFiles(files);
+    e.target.value = '';
+  }
+
+  function onDragOver(e: React.DragEvent) { e.preventDefault(); setIsDragActive(true); }
+  function onDragLeave() { setIsDragActive(false); }
+  function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragActive(false);
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
     uploadFiles(files);
-  }, [images.length, vehicleId]);
-
-  function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length > 0) uploadFiles(files);
-    e.target.value = ''; // reset so same file can be re-selected
   }
 
   async function setCover(image: VehicleImage) {
@@ -88,35 +103,18 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
   }
 
   return (
-    <div className="space-y-6">
-      {/* Hidden file inputs */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={onFileInputChange}
-      />
-      {/* Camera input — capture from camera directly on mobile */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={onFileInputChange}
-      />
+    <div className="space-y-5">
+      {/* Hidden inputs */}
+      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onFileChange} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChange} />
 
-      {/* Upload area */}
+      {/* Upload zone */}
       <div
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         className={`border-2 border-dashed rounded-xl p-6 text-center transition-all ${
-          isDragActive
-            ? 'border-amber-DEFAULT bg-amber-DEFAULT/5'
-            : 'border-white/10 hover:border-amber-DEFAULT/30 hover:bg-white/2'
+          isDragActive ? 'border-amber-DEFAULT bg-amber-DEFAULT/5' : 'border-white/10 hover:border-amber-DEFAULT/30'
         }`}
       >
         {uploading ? (
@@ -125,31 +123,20 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
             <div className="text-sm text-chrome-dim">{uploadProgress}</div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <Upload className="w-8 h-8 text-chrome-muted mx-auto" />
-            <div>
-              <div className="text-sm text-chrome-dim mb-1">
-                {isDragActive ? 'Drop images here' : 'Drag photos here or choose below'}
-              </div>
-              <div className="text-xs text-chrome-muted">JPEG, PNG, WebP, HEIC — up to 50MB each</div>
+            <div className="text-sm text-chrome-dim">
+              {isDragActive ? 'Drop images here' : 'Drag photos here or use buttons below'}
             </div>
-
-            {/* Upload buttons */}
-            <div className="flex flex-wrap gap-3 justify-center">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="btn-amber rounded-lg px-4 py-2 text-sm flex items-center gap-2"
-              >
+            <div className="text-xs text-chrome-muted">JPEG · PNG · WebP · HEIC — any size</div>
+            <div className="flex flex-wrap gap-3 justify-center pt-1">
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                className="btn-amber rounded-lg px-4 py-2 text-sm flex items-center gap-2">
                 <Upload className="w-4 h-4" /> Choose Photos
               </button>
-              {/* Camera button — shows on mobile */}
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                className="btn-ghost rounded-lg px-4 py-2 text-sm flex items-center gap-2 md:hidden"
-              >
-                <Camera className="w-4 h-4" /> Take Photo
+              <button type="button" onClick={() => cameraInputRef.current?.click()}
+                className="btn-ghost rounded-lg px-4 py-2 text-sm flex items-center gap-2 md:hidden">
+                <Camera className="w-4 h-4" /> Camera
               </button>
             </div>
           </div>
@@ -158,27 +145,21 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
 
       {/* Error */}
       {uploadError && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
-          <X className="w-4 h-4 shrink-0" />
-          <span>{uploadError}</span>
-          <button onClick={() => setUploadError('')} className="ml-auto text-red-400/60 hover:text-red-400">
-            <X className="w-3.5 h-3.5" />
-          </button>
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+          <span className="flex-1">{uploadError}</span>
+          <button onClick={() => setUploadError('')}><X className="w-4 h-4" /></button>
         </div>
       )}
 
-      {/* Gallery grid */}
+      {/* Gallery */}
       {images.length === 0 ? (
         <div className="text-center py-8 text-chrome-dim text-sm">No photos yet</div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {images.map(img => (
             <div key={img.id} className="relative group rounded-xl overflow-hidden aspect-video bg-obsidian-700">
-              <img
-                src={img.public_url}
-                alt={img.caption ?? 'Vehicle photo'}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              />
+              <img src={img.public_url} alt={img.caption ?? 'Vehicle photo'}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
 
               {img.is_cover && (
                 <div className="absolute top-2 left-2 flex items-center gap-1 bg-amber-DEFAULT text-obsidian-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -188,20 +169,20 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
 
               {/* Desktop hover overlay */}
               <div className="absolute inset-0 bg-obsidian-900/70 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex items-center justify-center gap-3">
-                <button onClick={() => setLightbox(img)} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                <button onClick={() => setLightbox(img)} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20">
                   <ZoomIn className="w-4 h-4 text-chrome-bright" />
                 </button>
                 {!img.is_cover && (
-                  <button onClick={() => setCover(img)} className="w-9 h-9 rounded-full bg-amber-DEFAULT/20 flex items-center justify-center hover:bg-amber-DEFAULT/30 transition-colors">
+                  <button onClick={() => setCover(img)} className="w-9 h-9 rounded-full bg-amber-DEFAULT/20 flex items-center justify-center hover:bg-amber-DEFAULT/30">
                     <Star className="w-4 h-4 text-amber-DEFAULT" />
                   </button>
                 )}
-                <button onClick={() => deleteImage(img)} className="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center hover:bg-red-500/30 transition-colors">
+                <button onClick={() => deleteImage(img)} className="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center hover:bg-red-500/30">
                   <Trash2 className="w-4 h-4 text-red-400" />
                 </button>
               </div>
 
-              {/* Mobile action bar — always visible at bottom */}
+              {/* Mobile action bar */}
               <div className="absolute bottom-0 left-0 right-0 flex justify-end gap-1.5 p-2 bg-gradient-to-t from-obsidian-900/90 to-transparent md:hidden">
                 <button onClick={() => setLightbox(img)} className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
                   <ZoomIn className="w-3.5 h-3.5 text-chrome-bright" />
@@ -222,22 +203,15 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
 
       {/* Lightbox */}
       {lightbox && (
-        <div
-          className="fixed inset-0 z-[9999] bg-obsidian-900/95 flex items-center justify-center p-4"
-          onClick={() => setLightbox(null)}
-        >
-          <button
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20"
-            onClick={() => setLightbox(null)}
-          >
+        <div className="fixed inset-0 z-[9999] bg-obsidian-900/95 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}>
+          <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"
+            onClick={() => setLightbox(null)}>
             <X className="w-5 h-5" />
           </button>
-          <img
-            src={lightbox.public_url}
-            alt={lightbox.caption ?? ''}
+          <img src={lightbox.public_url} alt={lightbox.caption ?? ''}
             className="max-w-full max-h-full rounded-xl object-contain"
-            onClick={e => e.stopPropagation()}
-          />
+            onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>
