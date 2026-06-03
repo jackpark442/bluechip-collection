@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { Upload, Trash2, Star, Loader2, X, ZoomIn } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { Upload, Trash2, Star, Loader2, X, ZoomIn, Camera } from 'lucide-react';
 import type { VehicleImage } from '@/types';
 
 interface Props {
@@ -14,44 +13,70 @@ interface Props {
 export default function ImageGallery({ images: initialImages, vehicleId, onRefresh }: Props) {
   const [images, setImages] = useState(initialImages);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const [uploadError, setUploadError] = useState('');
   const [lightbox, setLightbox] = useState<VehicleImage | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<string>('');
+  const [isDragActive, setIsDragActive] = useState(false);
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  // Refs for the two file inputs (gallery + camera)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  async function uploadFiles(files: File[]) {
+    if (files.length === 0) return;
     setUploading(true);
-    for (let i = 0; i < acceptedFiles.length; i++) {
-      const file = acceptedFiles[i];
-      setUploadProgress(`Uploading ${i + 1}/${acceptedFiles.length}: ${file.name}`);
+    setUploadError('');
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setUploadProgress(`Uploading ${i + 1} of ${files.length}…`);
 
       const formData = new FormData();
       formData.append('file', file);
       formData.append('vehicleId', vehicleId);
       formData.append('isCover', images.length === 0 && i === 0 ? 'true' : 'false');
 
-      const res = await fetch('/api/images/upload', { method: 'POST', body: formData });
-      if (res.ok) {
-        const newImage = await res.json();
-        setImages(prev => [...prev, newImage]);
+      try {
+        const res = await fetch('/api/images/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) {
+          setUploadError(data.error ?? 'Upload failed');
+          break;
+        }
+        setImages(prev => [...prev, data]);
+      } catch (err) {
+        setUploadError('Network error — please try again');
+        break;
       }
     }
+
     setUploading(false);
     setUploadProgress('');
     onRefresh();
-  }, [vehicleId, images.length, onRefresh]);
+  }
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.heic'] },
-    maxSize: 20 * 1024 * 1024,
-  });
+  // Drag-and-drop handlers
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(true);
+  }, []);
+  const onDragLeave = useCallback(() => setIsDragActive(false), []);
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(false);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    uploadFiles(files);
+  }, [images.length, vehicleId]);
+
+  function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0) uploadFiles(files);
+    e.target.value = ''; // reset so same file can be re-selected
+  }
 
   async function setCover(image: VehicleImage) {
-    // Optimistic update
     setImages(prev => prev.map(img => ({ ...img, is_cover: img.id === image.id })));
-
-    // Upload a new version flagged as cover isn't quite right — we need a PATCH endpoint
-    // For now, re-upload concept: update via Supabase directly
-    const res = await fetch(`/api/images/upload?imageId=${image.id}&setCover=true`, { method: 'PATCH' });
+    await fetch(`/api/images/upload?imageId=${image.id}&setCover=true`, { method: 'PATCH' });
     onRefresh();
   }
 
@@ -64,64 +89,132 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
 
   return (
     <div className="space-y-6">
-      {/* Upload zone */}
-      <div {...getRootProps()} className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${isDragActive ? 'border-amber-DEFAULT bg-amber-DEFAULT/5' : 'border-white/10 hover:border-amber-DEFAULT/30 hover:bg-white/2'}`}>
-        <input {...getInputProps()} />
+      {/* Hidden file inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={onFileInputChange}
+      />
+      {/* Camera input — capture from camera directly on mobile */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={onFileInputChange}
+      />
+
+      {/* Upload area */}
+      <div
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={`border-2 border-dashed rounded-xl p-6 text-center transition-all ${
+          isDragActive
+            ? 'border-amber-DEFAULT bg-amber-DEFAULT/5'
+            : 'border-white/10 hover:border-amber-DEFAULT/30 hover:bg-white/2'
+        }`}
+      >
         {uploading ? (
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-3 py-2">
             <Loader2 className="w-8 h-8 text-amber-DEFAULT animate-spin" />
             <div className="text-sm text-chrome-dim">{uploadProgress}</div>
           </div>
         ) : (
-          <div>
-            <Upload className="w-8 h-8 text-chrome-muted mx-auto mb-3" />
-            <div className="text-sm text-chrome-dim">{isDragActive ? 'Drop images here' : 'Drag photos here or click to browse'}</div>
-            <div className="text-xs text-chrome-muted mt-1">JPEG, PNG, WebP — multiple files supported</div>
+          <div className="space-y-4">
+            <Upload className="w-8 h-8 text-chrome-muted mx-auto" />
+            <div>
+              <div className="text-sm text-chrome-dim mb-1">
+                {isDragActive ? 'Drop images here' : 'Drag photos here or choose below'}
+              </div>
+              <div className="text-xs text-chrome-muted">JPEG, PNG, WebP, HEIC — up to 50MB each</div>
+            </div>
+
+            {/* Upload buttons */}
+            <div className="flex flex-wrap gap-3 justify-center">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn-amber rounded-lg px-4 py-2 text-sm flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" /> Choose Photos
+              </button>
+              {/* Camera button — shows on mobile */}
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="btn-ghost rounded-lg px-4 py-2 text-sm flex items-center gap-2 md:hidden"
+              >
+                <Camera className="w-4 h-4" /> Take Photo
+              </button>
+            </div>
           </div>
         )}
       </div>
 
+      {/* Error */}
+      {uploadError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+          <X className="w-4 h-4 shrink-0" />
+          <span>{uploadError}</span>
+          <button onClick={() => setUploadError('')} className="ml-auto text-red-400/60 hover:text-red-400">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Gallery grid */}
       {images.length === 0 ? (
-        <div className="text-center py-8 text-chrome-dim text-sm">No photos yet — upload some above</div>
+        <div className="text-center py-8 text-chrome-dim text-sm">No photos yet</div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {images.map(img => (
             <div key={img.id} className="relative group rounded-xl overflow-hidden aspect-video bg-obsidian-700">
-              <img src={img.public_url} alt={img.caption ?? 'Vehicle photo'}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <img
+                src={img.public_url}
+                alt={img.caption ?? 'Vehicle photo'}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
 
-              {/* Cover badge */}
               {img.is_cover && (
                 <div className="absolute top-2 left-2 flex items-center gap-1 bg-amber-DEFAULT text-obsidian-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
                   <Star className="w-3 h-3" /> Cover
                 </div>
               )}
 
-              {/* Hover overlay */}
-              <div className="absolute inset-0 bg-obsidian-900/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                <button onClick={() => setLightbox(img)}
-                  className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+              {/* Desktop hover overlay */}
+              <div className="absolute inset-0 bg-obsidian-900/70 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex items-center justify-center gap-3">
+                <button onClick={() => setLightbox(img)} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
                   <ZoomIn className="w-4 h-4 text-chrome-bright" />
                 </button>
                 {!img.is_cover && (
-                  <button onClick={() => setCover(img)}
-                    className="w-9 h-9 rounded-full bg-amber-DEFAULT/20 flex items-center justify-center hover:bg-amber-DEFAULT/30 transition-colors">
+                  <button onClick={() => setCover(img)} className="w-9 h-9 rounded-full bg-amber-DEFAULT/20 flex items-center justify-center hover:bg-amber-DEFAULT/30 transition-colors">
                     <Star className="w-4 h-4 text-amber-DEFAULT" />
                   </button>
                 )}
-                <button onClick={() => deleteImage(img)}
-                  className="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center hover:bg-red-500/30 transition-colors">
+                <button onClick={() => deleteImage(img)} className="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center hover:bg-red-500/30 transition-colors">
                   <Trash2 className="w-4 h-4 text-red-400" />
                 </button>
               </div>
 
-              {/* Caption */}
-              {img.caption && (
-                <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-obsidian-900 text-xs text-chrome-dim truncate">
-                  {img.caption}
-                </div>
-              )}
+              {/* Mobile action bar — always visible at bottom */}
+              <div className="absolute bottom-0 left-0 right-0 flex justify-end gap-1.5 p-2 bg-gradient-to-t from-obsidian-900/90 to-transparent md:hidden">
+                <button onClick={() => setLightbox(img)} className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                  <ZoomIn className="w-3.5 h-3.5 text-chrome-bright" />
+                </button>
+                {!img.is_cover && (
+                  <button onClick={() => setCover(img)} className="w-8 h-8 rounded-lg bg-amber-DEFAULT/20 flex items-center justify-center">
+                    <Star className="w-3.5 h-3.5 text-amber-DEFAULT" />
+                  </button>
+                )}
+                <button onClick={() => deleteImage(img)} className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -129,18 +222,22 @@ export default function ImageGallery({ images: initialImages, vehicleId, onRefre
 
       {/* Lightbox */}
       {lightbox && (
-        <div className="fixed inset-0 z-50 bg-obsidian-900/95 flex items-center justify-center p-4"
-          onClick={() => setLightbox(null)}>
-          <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20"
-            onClick={() => setLightbox(null)}>
+        <div
+          className="fixed inset-0 z-[9999] bg-obsidian-900/95 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20"
+            onClick={() => setLightbox(null)}
+          >
             <X className="w-5 h-5" />
           </button>
-          <img src={lightbox.public_url} alt={lightbox.caption ?? ''}
+          <img
+            src={lightbox.public_url}
+            alt={lightbox.caption ?? ''}
             className="max-w-full max-h-full rounded-xl object-contain"
-            onClick={e => e.stopPropagation()} />
-          {lightbox.caption && (
-            <div className="absolute bottom-6 text-sm text-chrome-dim">{lightbox.caption}</div>
-          )}
+            onClick={e => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
