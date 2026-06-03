@@ -31,11 +31,12 @@ export default function Modal({ title, onClose, children, width = 'max-w-lg' }: 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center sm:p-4"
       style={{ background: 'rgba(5,5,7,0.85)', backdropFilter: 'blur(8px)' }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className={`glass-card rounded-2xl w-full ${width} max-h-[90vh] overflow-y-auto`}
+      <div className={`glass-card w-full ${width} max-h-[95vh] sm:max-h-[90vh] overflow-y-auto
+        rounded-t-2xl sm:rounded-2xl`}
         style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
         <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
           <h2 className="font-display text-lg text-chrome-bright">{title}</h2>

@@ -243,3 +243,13 @@ h1, h2 { font-family: var(--font-display); }
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0;  }
 }
+
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

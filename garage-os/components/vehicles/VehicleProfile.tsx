@@ -131,7 +131,7 @@ export default function VehicleProfile(props: Props) {
         </div>
 
         {/* Quick stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/5">
+        <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/5 overflow-x-auto">
           {[
             { label: 'Current Value', value: formatCurrency(vehicle.current_value), accent: true },
             { label: 'Purchase Price', value: formatCurrency(vehicle.purchase_price) },
@@ -147,7 +147,7 @@ export default function VehicleProfile(props: Props) {
       </div>
 
       {/* Compliance summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <ComplianceCard label="MOT" status={motStatus}
           date={latestMot?.expiry_date ?? firstMotDue}
           days={daysUntil(latestMot?.expiry_date ?? firstMotDue)}
@@ -167,7 +167,7 @@ export default function VehicleProfile(props: Props) {
 
       {/* Tabs */}
       <div className="border-b border-white/5">
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto scrollbar-none">
           {TABS.map(({ id, label, icon: Icon }) => {
             const openJobs = id === 'jobs' ? jobs.filter(j => j.status !== 'done').length : 0;
             return (
@@ -294,7 +294,7 @@ function OverviewTab({ vehicle: v, reminders, vehicleKeys, onRefresh, onAddKey, 
   ].filter(s => s.value);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="glass-card rounded-xl p-6">
         <h3 className="font-display text-lg text-chrome-bright mb-5">Technical Specifications</h3>
         {specs.length === 0 ? (
@@ -543,8 +543,8 @@ function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, 
         {motRecords.length === 0 ? (
           <EmptySection message="No MOT records" action={onAddMot} actionLabel="Add MOT" />
         ) : (
-          <div className="glass-card rounded-xl overflow-hidden">
-            <table className="w-full data-table">
+          <div className="glass-card rounded-xl overflow-x-auto">
+            <table className="w-full data-table min-w-[540px]">
               <thead><tr><th>Expiry</th><th>Test Date</th><th>Result</th><th>Mileage</th><th>Certificate</th><th>Centre</th></tr></thead>
               <tbody>
                 {motRecords.map((m: MotRecord) => (
@@ -588,8 +588,8 @@ function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, 
         {insurance.length === 0 ? (
           <EmptySection message="No insurance records" action={onAddIns} actionLabel="Add Policy" />
         ) : (
-          <div className="glass-card rounded-xl overflow-hidden">
-            <table className="w-full data-table">
+          <div className="glass-card rounded-xl overflow-x-auto">
+            <table className="w-full data-table min-w-[540px]">
               <thead><tr><th>Provider</th><th>Policy No.</th><th>Start</th><th>End</th><th>Premium</th><th>Agreed Value</th></tr></thead>
               <tbody>
                 {insurance.map((i: InsurancePolicy) => (
@@ -622,8 +622,8 @@ function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, 
         {taxRecords.length === 0 ? (
           <EmptySection message="No tax records" action={onAddTax} actionLabel="Add Tax Record" />
         ) : (
-          <div className="glass-card rounded-xl overflow-hidden">
-            <table className="w-full data-table">
+          <div className="glass-card rounded-xl overflow-x-auto">
+            <table className="w-full data-table min-w-[400px]">
               <thead><tr><th>Start</th><th>End</th><th>Amount</th><th>Reference</th><th>Status</th></tr></thead>
               <tbody>
                 {taxRecords.map((t: VehicleTax) => (

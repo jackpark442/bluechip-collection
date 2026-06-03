@@ -70,7 +70,7 @@ export default function FleetClient({ fleet }: Props) {
       </div>
 
       {/* Filters */}
-      <div className="glass-card rounded-xl p-4 flex flex-wrap gap-4 items-center">
+      <div className="glass-card rounded-xl p-4 flex flex-wrap gap-3 items-center">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-chrome-muted" />
@@ -127,8 +127,8 @@ export default function FleetClient({ fleet }: Props) {
           {filtered.map(v => <VehicleGridCard key={v.id} vehicle={v} />)}
         </div>
       ) : (
-        <div className="glass-card rounded-xl overflow-hidden">
-          <table className="w-full data-table">
+        <div className="glass-card rounded-xl overflow-x-auto">
+          <table className="w-full data-table min-w-[700px]">
             <thead>
               <tr>
                 <th className="text-left">Vehicle</th>

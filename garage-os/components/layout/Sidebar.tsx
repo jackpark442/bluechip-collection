@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard, Car, Bell, TrendingUp, Search,
-  Settings, LogOut, Shield, ChevronRight, Gauge, Map, CalendarDays, UserCircle2
+  Settings, LogOut, Shield, ChevronRight, Gauge, Map, CalendarDays, UserCircle2, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   { href: '/search',     label: 'Search',       icon: Search },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -54,14 +54,20 @@ export default function Sidebar() {
 
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-7 border-b border-white/5">
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center"
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: 'linear-gradient(135deg, #e8a800, #d4960a)' }}>
           <Shield className="w-5 h-5 text-obsidian-900" />
         </div>
-        <div>
+        <div className="flex-1">
           <div className="font-display text-base font-bold text-chrome-bright tracking-wide">BLUECHIP</div>
           <div className="text-[10px] text-chrome-muted tracking-[0.12em] uppercase">Collection</div>
         </div>
+        {/* Close button — mobile only */}
+        {onClose && (
+          <button onClick={onClose} className="lg:hidden w-8 h-8 rounded-lg btn-ghost flex items-center justify-center text-chrome-dim">
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -73,7 +79,7 @@ export default function Sidebar() {
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/');
           return (
-            <Link key={href} href={href} className={cn('nav-item', active && 'active')}>
+            <Link key={href} href={href} onClick={onClose} className={cn('nav-item', active && 'active')}>
               <Icon className="w-4 h-4 shrink-0" />
               <span>{label}</span>
               {active && <ChevronRight className="w-3 h-3 ml-auto opacity-50" />}

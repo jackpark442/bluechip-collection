@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Search } from 'lucide-react';
+import { Bell, Search, Menu } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Reminder } from '@/types';
 import { daysUntil, formatDate } from '@/lib/utils';
@@ -17,7 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/settings': 'Settings',
 };
 
-export default function Header() {
+export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
   const [pendingReminders, setPendingReminders] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -61,13 +61,20 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 relative z-30"
+    <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-8 relative z-30"
       style={{ background: 'rgba(10, 10, 15, 0.95)', backdropFilter: 'blur(12px)' }}>
 
-      <div>
-        <h1 className="font-display text-xl text-chrome-bright">{title}</h1>
-        <div className="text-xs text-chrome-muted mt-0.5">
-          {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      <div className="flex items-center gap-3">
+        {/* Hamburger — mobile only */}
+        <button onClick={onMenuClick}
+          className="lg:hidden w-9 h-9 rounded-lg flex items-center justify-center btn-ghost shrink-0">
+          <Menu className="w-5 h-5" />
+        </button>
+        <div>
+        <h1 className="font-display text-lg md:text-xl text-chrome-bright">{title}</h1>
+          <div className="text-xs text-chrome-muted mt-0.5 hidden sm:block">
+            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
         </div>
       </div>
 
