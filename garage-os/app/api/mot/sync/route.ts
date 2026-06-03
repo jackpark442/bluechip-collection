@@ -113,6 +113,42 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // ── Clean up stale MOT reminders, keep just one for the latest expiry ────────
+  // Find the latest PASSED test with an actual expiry date
+  const latestPassed = dvsa.allTests
+    .filter(t => t.testResult === 'PASSED' && t.expiryDate)
+    .sort((a, b) => b.expiryDate!.localeCompare(a.expiryDate!))
+    [0];
+
+  if (latestPassed?.expiryDate) {
+    // Delete all existing mot_due reminders for this vehicle
+    await supabase.from('reminders')
+      .delete()
+      .eq('vehicle_id', vehicleId)
+      .eq('owner_id', ownerId)
+      .eq('type', 'mot_due');
+
+    // Create a single reminder for the latest MOT expiry
+    const expiryDate = latestPassed.expiryDate;
+    const daysUntilExpiry = Math.ceil(
+      (new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Only create reminder if not already expired more than 1 year ago
+    if (daysUntilExpiry > -365) {
+      await supabase.from('reminders').insert({
+        vehicle_id: vehicleId,
+        owner_id: ownerId,
+        type: 'mot_due',
+        title: 'MOT Due',
+        description: `MOT expires ${expiryDate}`,
+        due_date: expiryDate,
+        status: daysUntilExpiry < 0 ? 'pending' : 'pending',
+        notify_days_before: [60, 30, 14, 7],
+      });
+    }
+  }
+
   // Enrich vehicle data from DVSA if fields are missing
   const vehicleUpdates: Record<string, unknown> = {};
   if (!vehicle.colour && dvsa.colour) vehicleUpdates.colour = capitalise(dvsa.colour);

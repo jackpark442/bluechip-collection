@@ -69,7 +69,7 @@ export default function VehicleProfile(props: Props) {
   const router = useRouter();
   const supabase = createClient();
 
-  const latestMot = motRecords[0];
+  const latestMot = motRecords.find(m => m.result === 'pass') ?? motRecords[0];
   const latestIns = insurance[0];
   const latestTax = taxRecords[0];
   const firstMotDue = !latestMot ? vehicle.first_mot_due_date : undefined;
