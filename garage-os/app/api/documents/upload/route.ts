@@ -33,9 +33,10 @@ export async function POST(request: NextRequest) {
   }
 
   // Get signed URL (documents bucket is private)
-  const { data: { signedUrl } } = await supabase.storage
+  const { data: signedUrlData } = await supabase.storage
     .from('vehicle-documents')
     .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1 year
+  const signedUrl = signedUrlData?.signedUrl ?? '';
 
   // Insert document record
   const { data: doc, error: dbError } = await supabase
