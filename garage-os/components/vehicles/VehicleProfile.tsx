@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   Car, Shield, FileText, Wrench, Camera, TrendingUp, Bell,
   Edit2, Trash2, ChevronLeft, Plus, ExternalLink, Download,
-  CheckCircle, AlertTriangle, AlertCircle, Clock, MapPin, Key, ClipboardList
+  CheckCircle, AlertTriangle, AlertCircle, Clock, MapPin, Key, ClipboardList, RefreshCw, Loader2
 } from 'lucide-react';
 import type {
   Vehicle, VehicleImage, MotRecord, InsurancePolicy, VehicleTax,
@@ -535,16 +535,56 @@ function LocationPickerDynamic(props: any) {
 
 // ─── Compliance Tab ───────────────────────────────────────
 function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, onAddTax, vehicleId, registration, onRefresh }: any) {
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+
+  async function syncMot() {
+    if (!registration) { setSyncMsg('No registration set on this vehicle.'); return; }
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const res = await fetch('/api/mot/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ vehicleId, registration }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncMsg(`Error: ${data.error ?? 'Sync failed'}`);
+      } else {
+        setSyncMsg(`✓ Synced ${data.dvsa?.totalTests ?? 0} tests (${data.imported ?? 0} new)`);
+        onRefresh();
+      }
+    } catch {
+      setSyncMsg('Network error — please try again');
+    }
+    setSyncing(false);
+  }
+
   return (
     <div className="space-y-8">
       {/* MOT */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-lg text-chrome-bright">MOT History</h3>
-          <button onClick={onAddMot} className="btn-ghost rounded-lg px-3 py-2 text-xs flex items-center gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Add MOT
-          </button>
+          <div className="flex items-center gap-2">
+            {registration && (
+              <button onClick={syncMot} disabled={syncing}
+                className="btn-ghost rounded-lg px-3 py-2 text-xs flex items-center gap-1.5 disabled:opacity-60">
+                {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                {syncing ? 'Syncing…' : 'Sync DVSA'}
+              </button>
+            )}
+            <button onClick={onAddMot} className="btn-ghost rounded-lg px-3 py-2 text-xs flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Add MOT
+            </button>
+          </div>
         </div>
+        {syncMsg && (
+          <div className={`mb-4 px-4 py-2.5 rounded-lg text-xs ${syncMsg.startsWith('✓') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+            {syncMsg}
+          </div>
+        )}
         {motRecords.length === 0 ? (
           <EmptySection message="No MOT records" action={onAddMot} actionLabel="Add MOT" />
         ) : (
