@@ -49,7 +49,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 flex flex-col z-40 border-r border-white/5"
+    <aside className="h-screen w-64 flex flex-col border-r border-white/5"
       style={{ background: 'linear-gradient(180deg, #0a0a0f 0%, #050507 100%)' }}>
 
       {/* Logo */}

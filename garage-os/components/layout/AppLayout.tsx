@@ -24,19 +24,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar drawer */}
       <div className={`
-        fixed left-0 top-0 h-screen z-50
+        fixed left-0 top-0 h-screen w-64 z-50 flex-shrink-0
         transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0 lg:z-40
       `}>
         <Sidebar />
 
-        {/* Close button — inside drawer, only on mobile */}
+        {/* Close button — mobile only, positioned top-right of sidebar */}
         <button
           onClick={close}
-          className="absolute top-5 right-4 lg:hidden
+          className="absolute top-5 right-3 lg:hidden
             w-8 h-8 rounded-lg flex items-center justify-center
-            text-chrome-dim hover:text-chrome-bright hover:bg-white/8 transition-colors"
+            text-chrome-dim hover:text-chrome-bright hover:bg-white/8 transition-colors z-10"
         >
           <X className="w-4 h-4" />
         </button>
