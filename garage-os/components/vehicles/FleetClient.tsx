@@ -7,14 +7,23 @@ import type { FleetOverview, VehicleCategory, VehicleStatus } from '@/types';
 import { formatCurrency, formatDate, daysUntil, CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS, getVehicleDisplayName } from '@/lib/utils';
 
 function getTrafficLight(v: FleetOverview): 'red' | 'amber' | 'green' | 'none' {
+  const isSorn = v.tax_exempt && v.tax_exemption_reason === 'SORN';
   const motDays = daysUntil(v.mot_expiry);
   const insDays = daysUntil(v.insurance_expiry);
-  const taxDays = v.tax_exempt ? null : daysUntil(v.tax_expiry);
+  const taxDays = v.tax_exempt && !isSorn ? null : isSorn ? null : daysUntil(v.tax_expiry);
+
   const all = [motDays, insDays, taxDays].filter(d => d !== null) as number[];
+
+  // Expired or overdue on anything = red
+  if (all.some(d => d < 0)) return 'red';
+
+  // SORN = amber (can't drive on public roads)
+  if (isSorn) return 'amber';
+
+  // MOT or insurance within 30 days = amber
   if (all.length === 0) return 'none';
-  const min = Math.min(...all);
-  if (min < 0 || all.some(d => d < 0)) return 'red';
-  if (min <= 30) return 'amber';
+  if (Math.min(...all) <= 30) return 'amber';
+
   return 'green';
 }
 
