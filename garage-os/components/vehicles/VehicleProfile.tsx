@@ -28,6 +28,7 @@ import AddDocumentModal from './modals/AddDocumentModal';
 import AddKeyModal from './modals/AddKeyModal';
 import ImageGallery from './ImageGallery';
 import PaperworkChecklist from './PaperworkChecklist';
+import MileageChart from './MileageChart';
 import JobsTab from './JobsTab';
 import DvlaStatusChecker from './DvlaStatusChecker';
 
@@ -190,7 +191,7 @@ export default function VehicleProfile(props: Props) {
 
       {/* Tab content */}
       <div className="min-h-[400px]">
-        {tab === 'overview' && <OverviewTab vehicle={vehicle} reminders={reminders} vehicleKeys={vehicleKeys} onRefresh={refresh} onAddKey={() => setShowAddKey(true)} onEditKey={k => { setEditingKey(k); setShowAddKey(true); }} />}
+        {tab === 'overview' && <OverviewTab vehicle={vehicle} reminders={reminders} vehicleKeys={vehicleKeys} motRecords={motRecords} onRefresh={refresh} onAddKey={() => setShowAddKey(true)} onEditKey={k => { setEditingKey(k); setShowAddKey(true); }} />}
         {tab === 'compliance' && (
           <ComplianceTab motRecords={motRecords} insurance={insurance} taxRecords={taxRecords}
             onAddMot={() => setShowAddMot(true)} onAddIns={() => setShowAddIns(true)} onAddTax={() => setShowAddTax(true)}
@@ -274,10 +275,11 @@ function ComplianceCard({ label, status, date, days, onAdd, provider, exempt, so
 }
 
 // ─── Overview Tab ─────────────────────────────────────────
-function OverviewTab({ vehicle: v, reminders, vehicleKeys, onRefresh, onAddKey, onEditKey }: {
+function OverviewTab({ vehicle: v, reminders, vehicleKeys, motRecords, onRefresh, onAddKey, onEditKey }: {
   vehicle: Vehicle;
   reminders: Reminder[];
   vehicleKeys: VehicleKey[];
+  motRecords: MotRecord[];
   onRefresh: () => void;
   onAddKey: () => void;
   onEditKey: (k: VehicleKey) => void;
@@ -361,6 +363,9 @@ function OverviewTab({ vehicle: v, reminders, vehicleKeys, onRefresh, onAddKey, 
 
         <LocationCard vehicle={v} onRefresh={onRefresh} />
       </div>
+
+      {/* Mileage chart — full width below */}
+      <MileageChart motRecords={motRecords} currentMileage={v.mileage} purchaseDate={v.purchase_date} />
     </div>
   );
 }
