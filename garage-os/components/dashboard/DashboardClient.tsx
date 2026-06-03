@@ -4,8 +4,9 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Car, Shield, TrendingUp, CheckCircle, Wrench, ChevronRight, Plus, MapPin } from 'lucide-react';
-import type { FleetOverview, Reminder, MaintenanceRecord } from '@/types';
+import type { FleetOverview, Reminder, MaintenanceRecord, VehicleJob } from '@/types';
 import { formatCurrency, formatDate, daysUntil, getExpiryStatus, CATEGORY_LABELS, STATUS_LABELS, getVehicleDisplayName } from '@/lib/utils';
+import JobBoard from './JobBoard';
 
 interface Props {
   fleet: FleetOverview[];
@@ -13,11 +14,12 @@ interface Props {
   recentMaintenance: (MaintenanceRecord & { vehicle?: any })[];
   ytdMaintenanceCost: number;
   userId: string;
+  openJobs?: VehicleJob[];
 }
 
 const CATEGORY_COLORS = ['#e8a800', '#d4960a', '#b87d08', '#8c5e06', '#644205', '#3a2603', '#1a1002', '#f5c842', '#fde68a', '#c8c8d0', '#888896', '#555560'];
 
-export default function DashboardClient({ fleet, reminders, recentMaintenance, ytdMaintenanceCost }: Props) {
+export default function DashboardClient({ fleet, reminders, recentMaintenance, ytdMaintenanceCost, userId, openJobs = [] }: Props) {
   const stats = useMemo(() => {
     const active = fleet.filter(v => v.status === 'active');
     const totalValue = fleet.reduce((s, v) => s + (v.current_value || 0), 0);
@@ -197,6 +199,9 @@ export default function DashboardClient({ fleet, reminders, recentMaintenance, y
           </div>
         </div>
       </div>
+
+      {/* Job Board */}
+      <JobBoard jobs={openJobs} ownerId={userId} onRefresh={() => window.location.reload()} />
 
       {/* Fleet vehicles grid */}
       <div>

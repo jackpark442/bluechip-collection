@@ -44,6 +44,14 @@ export default async function DashboardPage() {
 
   const ytdTotal = ytdCosts?.reduce((sum, r) => sum + (r.total_cost || 0), 0) || 0;
 
+  // All open jobs with vehicle info and recent logs
+  const { data: openJobs } = await supabase
+    .from('vehicle_jobs')
+    .select('*, vehicle:vehicles(id, make, model, year, registration), logs:job_logs(*)')
+    .eq('owner_id', ownerId)
+    .neq('status', 'done')
+    .order('created_at', { ascending: false });
+
   return (
     <AppLayout>
       <DashboardClient
@@ -52,6 +60,7 @@ export default async function DashboardPage() {
         recentMaintenance={(recentMaintenance || []) as any}
         ytdMaintenanceCost={ytdTotal}
         userId={user.id}
+        openJobs={(openJobs || []) as any}
       />
     </AppLayout>
   );

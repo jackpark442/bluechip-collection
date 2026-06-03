@@ -21,7 +21,7 @@ export type JobStatus = 'todo' | 'in_progress' | 'done';
 
 export interface VehicleJob {
   id: string;
-  vehicle_id: string;
+  vehicle_id?: string; // nullable — general jobs have no vehicle
   owner_id: string;
   title: string;
   description?: string;
@@ -32,6 +32,18 @@ export interface VehicleJob {
   completed_at?: string;
   created_at: string;
   updated_at: string;
+  // Joined
+  vehicle?: Pick<Vehicle, 'id' | 'make' | 'model' | 'year' | 'registration'>;
+  logs?: JobLog[];
+}
+
+export interface JobLog {
+  id: string;
+  job_id: string;
+  owner_id: string;
+  log_date: string;
+  notes: string;
+  created_at: string;
 }
 
 export interface Profile {
