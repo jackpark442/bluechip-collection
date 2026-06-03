@@ -20,11 +20,10 @@ export async function POST(request: NextRequest) {
   }
 
   // Upload to Supabase Storage
-  const ext = file.name.split('.').pop() ?? 'bin';
   const storagePath = `${user.id}/${vehicleId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
   const arrayBuffer = await file.arrayBuffer();
-  const { data: uploadData, error: uploadError } = await supabase.storage
+  const { error: uploadError } = await supabase.storage
     .from('vehicle-documents')
     .upload(storagePath, arrayBuffer, { contentType: file.type, upsert: false });
 
@@ -33,10 +32,11 @@ export async function POST(request: NextRequest) {
   }
 
   // Get signed URL (documents bucket is private)
-  const { data: signedUrlData } = await supabase.storage
+  const signedUrlResult = await supabase.storage
     .from('vehicle-documents')
     .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1 year
-  const signedUrl = signedUrlData?.signedUrl ?? '';
+
+  const signedUrl = signedUrlResult.data?.signedUrl ?? '';
 
   // Insert document record
   const { data: doc, error: dbError } = await supabase
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       title,
       description: description ?? null,
       storage_path: storagePath,
-      public_url: signedUrl ?? '',
+      public_url: signedUrl,
       file_name: file.name,
       file_size: file.size,
       mime_type: file.type,
@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (dbError) {
-    // Clean up orphaned storage file
     await supabase.storage.from('vehicle-documents').remove([storagePath]);
     return NextResponse.json({ error: dbError.message }, { status: 500 });
   }
