@@ -48,37 +48,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: dvsa.error, code: dvsa.code }, { status: 422 });
   }
 
-  // ── Upsert MOT record ──────────────────────────────────────────────────────
-  // We identify "same test" by certificate number when available, else by expiry date.
+  // ── Upsert ALL MOT records from full history ─────────────────────────────
   let motRecord = null;
+  let imported = 0;
 
-  if (dvsa.latestTest) {
-    const test = dvsa.latestTest;
-
-    // Parse dates – DVSA returns "2024-01-15 09:30:00" or "2024-01-15"
-    const testDate = test.testDate.split(' ')[0];
+  for (const test of dvsa.allTests) {
+    const testDate = test.completedDate.split(' ')[0];
     const expiryDate = test.expiryDate ?? null;
-    const result =
-      test.result === 'PASSED'
-        ? expiryDate
-          ? 'pass'
-          : 'pass'
-        : 'fail';
+    const result = test.testResult === 'PASSED' ? 'pass' : 'fail';
+
+    // Split rfrAndComments into advisories and failures
+    const advisories = test.rfrAndComments
+      .filter((r: any) => r.type === 'ADVISORY' || r.type === 'USER ENTERED')
+      .map((r: any) => r.text ?? r.deficiencyText ?? String(r));
+    const failures = test.rfrAndComments
+      .filter((r: any) => r.type === 'FAIL' || r.dangerous === true)
+      .map((r: any) => r.text ?? r.deficiencyText ?? String(r));
+
+    const mileage = test.odometerResultType === 'READ' && test.odometerValue
+      ? parseInt(test.odometerValue, 10)
+      : null;
 
     const motPayload = {
       vehicle_id: vehicleId,
       owner_id: user.id,
       test_date: testDate,
-      expiry_date: expiryDate ?? testDate, // fallback for failures
+      expiry_date: expiryDate ?? testDate,
       result,
-      mileage_at_test: test.mileage ?? null,
-      certificate_number: test.testNumber ?? null,
-      advisories: test.advisories.length ? test.advisories : null,
-      failures: test.failures.length ? test.failures : null,
+      mileage_at_test: mileage,
+      certificate_number: test.motTestNumber ?? null,
+      advisories: advisories.length ? advisories : null,
+      failures:   failures.length   ? failures   : null,
       notes: `Imported from DVSA MOT History API on ${new Date().toISOString().split('T')[0]}`,
     };
 
-    // Check if this exact test already exists
+    // Upsert by test_date (each date is unique per vehicle)
     const { data: existing } = await supabase
       .from('mot_records')
       .select('id')
@@ -88,19 +92,13 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       const { data: updated } = await supabase
-        .from('mot_records')
-        .update(motPayload)
-        .eq('id', existing.id)
-        .select()
-        .single();
-      motRecord = updated;
+        .from('mot_records').update(motPayload).eq('id', existing.id).select().single();
+      if (!motRecord || testDate > (motRecord as any).test_date) motRecord = updated;
     } else {
       const { data: created } = await supabase
-        .from('mot_records')
-        .insert(motPayload)
-        .select()
-        .single();
-      motRecord = created;
+        .from('mot_records').insert(motPayload).select().single();
+      if (!motRecord || testDate > (motRecord as any).test_date) motRecord = created;
+      imported++;
     }
   }
 
@@ -130,6 +128,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     motRecord,
+    imported,
     vehicleUpdates: Object.keys(vehicleUpdates).length > 0 ? vehicleUpdates : null,
     dvsa: {
       registration: dvsa.registration,
