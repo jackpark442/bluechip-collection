@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { getEffectiveOwnerId } from '@/lib/supabase/get-owner-id';
 import { redirect } from 'next/navigation';
 import AppLayout from '@/components/layout/AppLayout';
 import FleetClient from '@/components/vehicles/FleetClient';
@@ -7,11 +8,13 @@ export default async function VehiclesPage() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/auth/login');
+  const ownerId = await getEffectiveOwnerId();
+  if (!ownerId) redirect('/auth/login');
 
   const { data: fleet } = await supabase
     .from('fleet_overview')
     .select('*')
-    .eq('owner_id', user.id)
+    .eq('owner_id', ownerId)
     .order('make', { ascending: true });
 
   return (

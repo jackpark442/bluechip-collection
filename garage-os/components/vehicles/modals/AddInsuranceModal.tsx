@@ -17,6 +17,10 @@ const INSURANCE_TYPES: { value: InsuranceType; label: string }[] = [
   { value: 'motor_trade', label: 'Motor Trade' },
 ];
 
+function F({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><label className="block text-xs text-chrome-dim mb-1.5 uppercase tracking-wider font-medium">{label}</label>{children}</div>;
+}
+
 export default function AddInsuranceModal({ vehicleId, onClose, onSave }: Props) {
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
@@ -51,10 +55,6 @@ export default function AddInsuranceModal({ vehicleId, onClose, onSave }: Props)
 
     setSaving(false); onSave(); onClose();
   }
-
-  const F = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div><label className="block text-xs text-chrome-dim mb-1.5 uppercase tracking-wider font-medium">{label}</label>{children}</div>
-  );
 
   return (
     <Modal title="Add Insurance Policy" onClose={onClose}>

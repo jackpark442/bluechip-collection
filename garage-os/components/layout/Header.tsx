@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Bell, Search } from 'lucide-react';
@@ -22,6 +22,17 @@ export default function Header() {
   const [pendingReminders, setPendingReminders] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [urgentReminders, setUrgentReminders] = useState<Reminder[]>([]);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+    }
+    if (showNotifications) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotifications]);
 
   const title = Object.entries(PAGE_TITLES).find(([path]) =>
     pathname === path || pathname.startsWith(path + '/')
@@ -50,7 +61,7 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="h-16 border-b border-white/5 flex items-center justify-between px-8"
+    <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 relative z-30"
       style={{ background: 'rgba(10, 10, 15, 0.95)', backdropFilter: 'blur(12px)' }}>
 
       <div>
@@ -66,7 +77,7 @@ export default function Header() {
           <Search className="w-4 h-4" />
         </Link>
 
-        <div className="relative">
+        <div className="relative" ref={notifRef}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="w-9 h-9 rounded-lg flex items-center justify-center btn-ghost relative">
@@ -79,7 +90,7 @@ export default function Header() {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-12 w-80 glass-card rounded-xl shadow-card-hover z-50 overflow-hidden">
+            <div className="absolute right-0 top-12 w-80 glass-card rounded-xl shadow-card-hover z-[200] overflow-hidden">
               <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
                 <span className="text-sm font-semibold text-chrome-bright">Upcoming</span>
                 <Link href="/reminders" className="text-xs text-amber-DEFAULT hover:text-amber-light" onClick={() => setShowNotifications(false)}>

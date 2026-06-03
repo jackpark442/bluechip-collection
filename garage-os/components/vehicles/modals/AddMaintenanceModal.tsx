@@ -11,6 +11,15 @@ interface Props { vehicleId: string; onClose: () => void; onSave: () => void; }
 
 const SERVICE_TYPES = Object.entries(SERVICE_TYPE_LABELS) as [ServiceType, string][];
 
+function F({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs text-chrome-dim mb-1.5 uppercase tracking-wider font-medium">{label}</label>
+      {children}
+    </div>
+  );
+}
+
 export default function AddMaintenanceModal({ vehicleId, onClose, onSave }: Props) {
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
@@ -58,10 +67,6 @@ export default function AddMaintenanceModal({ vehicleId, onClose, onSave }: Prop
 
     setSaving(false); onSave(); onClose();
   }
-
-  const F = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div><label className="block text-xs text-chrome-dim mb-1.5 uppercase tracking-wider font-medium">{label}</label>{children}</div>
-  );
 
   return (
     <Modal title="Log Service / Maintenance" onClose={onClose} width="max-w-2xl">

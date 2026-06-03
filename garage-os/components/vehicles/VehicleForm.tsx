@@ -29,7 +29,7 @@ const ALL_STATUSES = Object.entries(STATUS_LABELS) as [VehicleStatus, string][];
 type DvsaLookupState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'success'; make: string; model: string; colour?: string; fuelType?: string; engineSizeCc?: number; motExpiryDate?: string; testDate?: string; mileage?: number; advisories?: string[]; totalTests?: number }
+  | { status: 'success'; make: string; model: string; colour?: string; fuelType?: string; engineSizeCc?: number; motExpiryDate?: string; firstMotDueDate?: string; testDate?: string; mileage?: number; advisories?: string[]; totalTests?: number; source?: string; yearOfManufacture?: number; taxStatus?: string; taxDueDate?: string; noMotYet?: boolean; }
   | { status: 'error'; message: string };
 
 export default function VehicleForm({ mode, vehicle }: Props) {
@@ -64,6 +64,7 @@ export default function VehicleForm({ mode, vehicle }: Props) {
   const [purchaseDate, setPurchaseDate] = useState(vehicle?.purchase_date ?? '');
   const [currentValue, setCurrentValue] = useState(vehicle?.current_value?.toString() ?? '');
   const [notes, setNotes] = useState(vehicle?.notes ?? '');
+  const [firstMotDueDate, setFirstMotDueDate] = useState(vehicle?.first_mot_due_date ?? '');
 
   // ── DVSA lookup ─────────────────────────────────────────────────────────────
   async function handleDvsaLookup() {
@@ -79,6 +80,20 @@ export default function VehicleForm({ mode, vehicle }: Props) {
         return;
       }
 
+      // Also fetch live tax/SORN status from DVLA VES
+      let taxStatus = data.taxStatus as string | undefined;
+      let taxDueDate = data.taxDueDate as string | undefined;
+      if (!taxStatus) {
+        try {
+          const taxRes = await fetch(`/api/tax/lookup?reg=${encodeURIComponent(reg.trim())}`);
+          if (taxRes.ok) {
+            const taxData = await taxRes.json();
+            taxStatus = taxData.taxStatus;
+            taxDueDate = taxData.taxDueDate;
+          }
+        } catch { /* non-fatal */ }
+      }
+
       setDvsaState({
         status: 'success',
         make: data.make,
@@ -91,6 +106,12 @@ export default function VehicleForm({ mode, vehicle }: Props) {
         mileage: data.latestTest?.mileage,
         advisories: data.latestTest?.advisories,
         totalTests: data.allTests?.length ?? 0,
+        source: data.source,
+        yearOfManufacture: data.yearOfManufacture,
+        taxStatus,
+        taxDueDate,
+        noMotYet: data.noMotYet,
+        firstMotDueDate: data.firstMotDueDate,
       });
 
       // Auto-fill empty fields
@@ -98,8 +119,12 @@ export default function VehicleForm({ mode, vehicle }: Props) {
       if (!model && data.model) setModel(data.model);
       if (!colour && data.colour) setColour(capitalise(data.colour));
       if (!engineSizeCc && data.engineSizeCc) setEngineSizeCc(data.engineSizeCc.toString());
+      if (!year && data.yearOfManufacture) setYear(data.yearOfManufacture.toString());
       if (data.latestTest?.mileage && (!mileage || mileage === '0')) {
         setMileage(data.latestTest.mileage.toString());
+      }
+      if (data.firstMotDueDate && !firstMotDueDate) {
+        setFirstMotDueDate(data.firstMotDueDate);
       }
       if (data.fuelType) {
         const fuelMap: Record<string, FuelType> = {
@@ -109,8 +134,8 @@ export default function VehicleForm({ mode, vehicle }: Props) {
         const mapped = fuelMap[data.fuelType];
         if (mapped) setFuelType(mapped);
       }
-    } catch {
-      setDvsaState({ status: 'error', message: 'Network error. Check your connection.' });
+    } catch (err: any) {
+      setDvsaState({ status: 'error', message: err?.message ?? 'Network error. Check your connection.' });
     }
   }
 
@@ -144,6 +169,7 @@ export default function VehicleForm({ mode, vehicle }: Props) {
       purchase_date: purchaseDate || null,
       current_value: currentValue ? parseFloat(currentValue) : null,
       notes: notes.trim() || null,
+      first_mot_due_date: firstMotDueDate || null,
     };
 
     let vehicleId: string;
@@ -170,6 +196,50 @@ export default function VehicleForm({ mode, vehicle }: Props) {
         });
       } catch {
         // Non-fatal — vehicle was saved, MOT sync failed
+      }
+    }
+
+    // Auto-import tax / SORN record if we have data from DVLA
+    if (dvsaState.status === 'success' && dvsaState.taxStatus) {
+      try {
+        const isSorn = dvsaState.taxStatus.toLowerCase() === 'sorn';
+        const endDate = dvsaState.taxDueDate ?? new Date().toISOString().split('T')[0];
+        const { data: existingTax } = await supabase
+          .from('vehicle_tax').select('id').eq('vehicle_id', vehicleId).eq('end_date', endDate).maybeSingle();
+        if (!existingTax) {
+          await supabase.from('vehicle_tax').insert({
+            vehicle_id: vehicleId,
+            owner_id: user.id,
+            start_date: new Date().toISOString().split('T')[0],
+            end_date: endDate,
+            is_exempt: isSorn,
+            exemption_reason: isSorn ? 'SORN' : null,
+            notes: `Auto-imported from DVLA on ${new Date().toLocaleDateString('en-GB')}`,
+          });
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    // If vehicle has no MOT yet but we know the first MOT due date, create a reminder
+    if (
+      mode === 'create' &&
+      dvsaState.status === 'success' &&
+      dvsaState.noMotYet &&
+      dvsaState.firstMotDueDate
+    ) {
+      try {
+        await supabase.from('reminders').insert({
+          vehicle_id: vehicleId,
+          owner_id: user.id,
+          type: 'mot_due',
+          title: 'First MOT Due',
+          description: 'This vehicle has not had its first MOT yet.',
+          due_date: dvsaState.firstMotDueDate,
+          status: 'pending',
+          notify_days_before: [60, 30, 14, 7],
+        });
+      } catch {
+        // Non-fatal
       }
     }
 
@@ -232,15 +302,39 @@ export default function VehicleForm({ mode, vehicle }: Props) {
               <div className="flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-emerald-400 mb-2">Vehicle found in DVSA database</div>
+                  <div className="text-sm font-semibold text-emerald-400 mb-2">
+                    {dvsaState.status === 'success' && dvsaState.noMotYet
+                      ? 'Vehicle found — no MOT yet (under 3 years old)'
+                      : dvsaState.status === 'success' && dvsaState.source === 'dvla-ves'
+                      ? 'Vehicle found via DVLA (basic data)'
+                      : 'Vehicle found — MOT history imported'}
+                  </div>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs">
                     <div><span className="text-chrome-dim">Make:</span> <span className="text-chrome-bright">{dvsaState.make}</span></div>
                     <div><span className="text-chrome-dim">Model:</span> <span className="text-chrome-bright">{dvsaState.model}</span></div>
                     {dvsaState.colour && <div><span className="text-chrome-dim">Colour:</span> <span className="text-chrome-bright">{capitalise(dvsaState.colour)}</span></div>}
                     {dvsaState.fuelType && <div><span className="text-chrome-dim">Fuel:</span> <span className="text-chrome-bright">{dvsaState.fuelType}</span></div>}
+                    {dvsaState.status === 'success' && dvsaState.yearOfManufacture && <div><span className="text-chrome-dim">Year:</span> <span className="text-chrome-bright">{dvsaState.yearOfManufacture}</span></div>}
                     {dvsaState.motExpiryDate && <div><span className="text-chrome-dim">MOT expiry:</span> <span className="text-chrome-bright">{dvsaState.motExpiryDate}</span></div>}
+                    {dvsaState.status === 'success' && dvsaState.firstMotDueDate && !dvsaState.motExpiryDate && (
+                      <div><span className="text-chrome-dim">First MOT due:</span> <span className="text-amber-400 font-medium">{dvsaState.firstMotDueDate}</span></div>
+                    )}
+                    {dvsaState.status === 'success' && dvsaState.taxStatus && (
+                      <div className="col-span-2 flex items-center gap-2 mt-1 pt-1 border-t border-emerald-500/10">
+                        <span className="text-chrome-dim">Vehicle Tax:</span>
+                        <span className={`font-semibold px-2 py-0.5 rounded text-xs ${
+                          dvsaState.taxStatus.toLowerCase() === 'taxed'   ? 'bg-emerald-500/20 text-emerald-400' :
+                          dvsaState.taxStatus.toLowerCase() === 'sorn'    ? 'bg-amber-500/20 text-amber-400' :
+                                                                            'bg-red-500/20 text-red-400'
+                        }`}>{dvsaState.taxStatus}</span>
+                        {dvsaState.taxDueDate && (
+                          <span className="text-chrome-dim text-xs">· expires {dvsaState.taxDueDate}</span>
+                        )}
+                        <span className="text-chrome-muted text-xs">(will be saved automatically)</span>
+                      </div>
+                    )}
                     {dvsaState.mileage && <div><span className="text-chrome-dim">Last mileage:</span> <span className="text-chrome-bright">{dvsaState.mileage.toLocaleString()} mi</span></div>}
-                    {dvsaState.totalTests !== undefined && <div><span className="text-chrome-dim">MOT tests:</span> <span className="text-chrome-bright">{dvsaState.totalTests} on record</span></div>}
+                    {dvsaState.status === 'success' && dvsaState.totalTests !== undefined && dvsaState.totalTests > 0 && <div><span className="text-chrome-dim">MOT tests:</span> <span className="text-chrome-bright">{dvsaState.totalTests} on record</span></div>}
                   </div>
                   {dvsaState.advisories && dvsaState.advisories.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-emerald-500/20">
@@ -274,7 +368,7 @@ export default function VehicleForm({ mode, vehicle }: Props) {
           {dvsaState.status === 'idle' && (
             <div className="mt-3 flex items-center gap-2 text-xs text-chrome-muted">
               <Info className="w-3.5 h-3.5" />
-              <span>Requires a DVSA MOT History API key — see setup instructions.</span>
+              <span>Enter a UK registration and click Check — auto-fills make, colour, fuel type &amp; MOT expiry.</span>
             </div>
           )}
         </div>
@@ -349,6 +443,15 @@ export default function VehicleForm({ mode, vehicle }: Props) {
         </FormSection>
 
         {/* ── Financial ─────────────────────────────────────────────────────── */}
+        {/* ── Compliance ────────────────────────────────────────────────────── */}
+        <FormSection title="Compliance">
+          <Field label="First MOT Due Date" hint="Auto-filled from DVLA — correct to exact date from V5C if needed">
+            <input type="date" value={firstMotDueDate} onChange={e => setFirstMotDueDate(e.target.value)}
+              className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" />
+          </Field>
+          <p className="text-xs text-chrome-muted mt-1">Only set this for vehicles with no MOT history yet. Leave blank for vehicles that already have an MOT.</p>
+        </FormSection>
+
         <FormSection title="Financial">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Purchase Price (£)">
@@ -402,13 +505,14 @@ function FormSection({ title, children }: { title: string; children: React.React
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-semibold text-chrome-dim mb-2 tracking-[0.06em] uppercase">
         {label}{required && <span className="text-amber-DEFAULT ml-1">*</span>}
       </label>
       {children}
+      {hint && <p className="text-xs text-chrome-muted mt-1">{hint}</p>}
     </div>
   );
 }

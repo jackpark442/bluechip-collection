@@ -6,6 +6,8 @@ export async function GET(request: NextRequest) {
   const make = searchParams.get('make');
   const model = searchParams.get('model');
   const year = searchParams.get('year');
+  const engineSizeCc = searchParams.get('engineSizeCc');
+  const mileage = searchParams.get('mileage');
 
   if (!make || !model || !year) {
     return NextResponse.json({ error: 'make, model and year are required' }, { status: 400 });
@@ -16,7 +18,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await searchMarketPrices(make, model, parseInt(year));
+    const result = await searchMarketPrices(
+      make, model, parseInt(year),
+      engineSizeCc ? parseInt(engineSizeCc) : undefined,
+      mileage ? parseInt(mileage) : undefined,
+    );
     console.log('[market] listings found:', result.listings.length, 'prices:', result.prices);
     return NextResponse.json(result);
   } catch (err: any) {

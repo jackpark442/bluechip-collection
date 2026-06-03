@@ -7,11 +7,11 @@ import { createClient } from '@/lib/supabase/client';
 import {
   Car, Shield, FileText, Wrench, Camera, TrendingUp, Bell,
   Edit2, Trash2, ChevronLeft, Plus, ExternalLink, Download,
-  CheckCircle, AlertTriangle, AlertCircle, Clock, MapPin
+  CheckCircle, AlertTriangle, AlertCircle, Clock, MapPin, Key, ClipboardList
 } from 'lucide-react';
 import type {
   Vehicle, VehicleImage, MotRecord, InsurancePolicy, VehicleTax,
-  MaintenanceRecord, Document, Reminder, Valuation
+  MaintenanceRecord, Document, Reminder, Valuation, VehicleKey, KeyType, VehicleJob
 } from '@/types';
 import {
   formatCurrency, formatDate, formatMileage, daysUntil, getExpiryStatus,
@@ -19,12 +19,17 @@ import {
   SERVICE_TYPE_LABELS, DOCUMENT_CATEGORY_LABELS, getVehicleDisplayName, formatFileSize
 } from '@/lib/utils';
 import MarketPricePanel from './MarketPricePanel';
+import ValuationChart from './ValuationChart';
 import AddMotModal from './modals/AddMotModal';
 import AddInsuranceModal from './modals/AddInsuranceModal';
 import AddTaxModal from './modals/AddTaxModal';
 import AddMaintenanceModal from './modals/AddMaintenanceModal';
 import AddDocumentModal from './modals/AddDocumentModal';
+import AddKeyModal from './modals/AddKeyModal';
 import ImageGallery from './ImageGallery';
+import PaperworkChecklist from './PaperworkChecklist';
+import JobsTab from './JobsTab';
+import DvlaStatusChecker from './DvlaStatusChecker';
 
 interface Props {
   vehicle: Vehicle;
@@ -36,34 +41,41 @@ interface Props {
   documents: Document[];
   reminders: Reminder[];
   valuations: Valuation[];
+  vehicleKeys: VehicleKey[];
+  jobs: VehicleJob[];
 }
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Car },
   { id: 'compliance', label: 'Compliance', icon: Shield },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+  { id: 'jobs', label: 'Jobs', icon: ClipboardList },
   { id: 'documents', label: 'Documents', icon: FileText },
   { id: 'gallery', label: 'Gallery', icon: Camera },
   { id: 'valuation', label: 'Valuation', icon: TrendingUp },
 ];
 
 export default function VehicleProfile(props: Props) {
-  const { vehicle, images, motRecords, insurance, taxRecords, maintenance, documents, reminders, valuations } = props;
+  const { vehicle, images, motRecords, insurance, taxRecords, maintenance, documents, reminders, valuations, vehicleKeys, jobs } = props;
   const [tab, setTab] = useState('overview');
   const [showAddMot, setShowAddMot] = useState(false);
   const [showAddIns, setShowAddIns] = useState(false);
   const [showAddTax, setShowAddTax] = useState(false);
   const [showAddMaint, setShowAddMaint] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);
+  const [showAddKey, setShowAddKey] = useState(false);
+  const [editingKey, setEditingKey] = useState<VehicleKey | undefined>();
   const router = useRouter();
   const supabase = createClient();
 
   const latestMot = motRecords[0];
   const latestIns = insurance[0];
   const latestTax = taxRecords[0];
-  const motStatus = getExpiryStatus(latestMot?.expiry_date);
+  const firstMotDue = !latestMot ? vehicle.first_mot_due_date : undefined;
+  const motStatus = latestMot ? getExpiryStatus(latestMot.expiry_date) : firstMotDue ? getExpiryStatus(firstMotDue) : 'expired';
   const insStatus = getExpiryStatus(latestIns?.end_date);
-  const taxStatus = latestTax?.is_exempt ? 'ok' : getExpiryStatus(latestTax?.end_date);
+  const isSorn = latestTax?.is_exempt && latestTax?.exemption_reason === 'SORN';
+  const taxStatus = isSorn ? 'warning' : latestTax?.is_exempt ? 'ok' : getExpiryStatus(latestTax?.end_date);
   const totalMaintenanceCost = maintenance.reduce((s, m) => s + (m.total_cost || 0), 0);
 
   async function handleDelete() {
@@ -137,44 +149,58 @@ export default function VehicleProfile(props: Props) {
       {/* Compliance summary */}
       <div className="grid grid-cols-3 gap-4">
         <ComplianceCard label="MOT" status={motStatus}
-          date={latestMot?.expiry_date} days={daysUntil(latestMot?.expiry_date)}
-          onAdd={() => setShowAddMot(true)} provider={latestMot?.test_centre} />
+          date={latestMot?.expiry_date ?? firstMotDue}
+          days={daysUntil(latestMot?.expiry_date ?? firstMotDue)}
+          onAdd={() => setShowAddMot(true)}
+          provider={latestMot?.test_centre ?? (firstMotDue ? 'First MOT due' : undefined)} />
         <ComplianceCard label="Insurance" status={insStatus}
           date={latestIns?.end_date} days={daysUntil(latestIns?.end_date)}
           onAdd={() => setShowAddIns(true)} provider={latestIns?.provider} />
         <ComplianceCard label="Vehicle Tax" status={taxStatus}
-          date={latestTax?.is_exempt ? undefined : latestTax?.end_date}
-          days={latestTax?.is_exempt ? null : daysUntil(latestTax?.end_date)}
+          date={isSorn ? latestTax?.end_date : latestTax?.is_exempt ? undefined : latestTax?.end_date}
+          days={latestTax?.is_exempt && !isSorn ? null : daysUntil(latestTax?.end_date)}
           onAdd={() => setShowAddTax(true)}
-          provider={latestTax?.is_exempt ? 'Tax Exempt' : undefined}
-          exempt={latestTax?.is_exempt} />
+          provider={isSorn ? 'SORN' : latestTax?.is_exempt ? 'Tax Exempt' : undefined}
+          exempt={latestTax?.is_exempt && !isSorn}
+          sorn={isSorn} />
       </div>
 
       {/* Tabs */}
       <div className="border-b border-white/5">
         <div className="flex gap-1">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2 -mb-px ${
-                tab === id ? 'border-amber-DEFAULT text-amber-DEFAULT' : 'border-transparent text-chrome-dim hover:text-chrome-bright'
-              }`}>
-              <Icon className="w-4 h-4" />
-              <span className="hidden sm:inline">{label}</span>
-            </button>
-          ))}
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const openJobs = id === 'jobs' ? jobs.filter(j => j.status !== 'done').length : 0;
+            return (
+              <button key={id} onClick={() => setTab(id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2 -mb-px ${
+                  tab === id ? 'border-amber-DEFAULT text-amber-DEFAULT' : 'border-transparent text-chrome-dim hover:text-chrome-bright'
+                }`}>
+                <Icon className="w-4 h-4" />
+                <span className="hidden sm:inline">{label}</span>
+                {id === 'jobs' && openJobs > 0 && (
+                  <span className="text-[10px] font-bold bg-amber-DEFAULT text-obsidian-900 rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                    {openJobs}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Tab content */}
       <div className="min-h-[400px]">
-        {tab === 'overview' && <OverviewTab vehicle={vehicle} reminders={reminders} onRefresh={refresh} />}
+        {tab === 'overview' && <OverviewTab vehicle={vehicle} reminders={reminders} vehicleKeys={vehicleKeys} onRefresh={refresh} onAddKey={() => setShowAddKey(true)} onEditKey={k => { setEditingKey(k); setShowAddKey(true); }} />}
         {tab === 'compliance' && (
           <ComplianceTab motRecords={motRecords} insurance={insurance} taxRecords={taxRecords}
             onAddMot={() => setShowAddMot(true)} onAddIns={() => setShowAddIns(true)} onAddTax={() => setShowAddTax(true)}
-            vehicleId={vehicle.id} onRefresh={refresh} />
+            vehicleId={vehicle.id} registration={vehicle.registration} onRefresh={refresh} />
         )}
         {tab === 'maintenance' && (
           <MaintenanceTab records={maintenance} onAdd={() => setShowAddMaint(true)} vehicleId={vehicle.id} onRefresh={refresh} />
+        )}
+        {tab === 'jobs' && (
+          <JobsTab jobs={jobs} vehicleId={vehicle.id} onRefresh={refresh} />
         )}
         {tab === 'documents' && (
           <DocumentsTab documents={documents} onAdd={() => setShowAddDoc(true)} />
@@ -193,18 +219,26 @@ export default function VehicleProfile(props: Props) {
       {showAddTax && <AddTaxModal vehicleId={vehicle.id} onClose={() => setShowAddTax(false)} onSave={refresh} />}
       {showAddMaint && <AddMaintenanceModal vehicleId={vehicle.id} onClose={() => setShowAddMaint(false)} onSave={refresh} />}
       {showAddDoc && <AddDocumentModal vehicleId={vehicle.id} onClose={() => setShowAddDoc(false)} onSave={refresh} />}
+      {showAddKey && (
+        <AddKeyModal
+          vehicleId={vehicle.id}
+          existing={editingKey}
+          onClose={() => { setShowAddKey(false); setEditingKey(undefined); }}
+          onSave={refresh}
+        />
+      )}
     </div>
   );
 }
 
 // ─── Compliance Card ──────────────────────────────────────
-function ComplianceCard({ label, status, date, days, onAdd, provider, exempt }: {
+function ComplianceCard({ label, status, date, days, onAdd, provider, exempt, sorn }: {
   label: string; status: string; date?: string; days: number | null;
-  onAdd: () => void; provider?: string; exempt?: boolean;
+  onAdd: () => void; provider?: string; exempt?: boolean; sorn?: boolean;
 }) {
-  const Icon = status === 'ok' || exempt ? CheckCircle : status === 'warning' ? Clock : AlertTriangle;
-  const iconColor = status === 'ok' || exempt ? 'text-emerald-400' : status === 'warning' ? 'text-amber-400' : 'text-red-400';
-  const bgColor = status === 'ok' || exempt ? 'bg-emerald-500/10 border-emerald-500/20' : status === 'warning' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20';
+  const Icon = exempt ? CheckCircle : sorn ? AlertTriangle : status === 'ok' ? CheckCircle : status === 'warning' ? Clock : AlertTriangle;
+  const iconColor = sorn ? 'text-amber-400' : status === 'ok' || exempt ? 'text-emerald-400' : status === 'warning' ? 'text-amber-400' : 'text-red-400';
+  const bgColor = sorn ? 'bg-amber-500/10 border-amber-500/20' : status === 'ok' || exempt ? 'bg-emerald-500/10 border-emerald-500/20' : status === 'warning' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20';
 
   return (
     <div className={`glass-card rounded-xl p-5 border ${bgColor}`}>
@@ -217,7 +251,12 @@ function ComplianceCard({ label, status, date, days, onAdd, provider, exempt }: 
           <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
-      {exempt ? (
+      {sorn ? (
+        <>
+          <div className="text-sm text-amber-400 font-bold">SORN</div>
+          {date && <div className="text-xs text-chrome-dim mt-1">Declared {formatDate(date)}</div>}
+        </>
+      ) : exempt ? (
         <div className="text-sm text-blue-400 font-medium">Exempt</div>
       ) : date ? (
         <>
@@ -235,7 +274,14 @@ function ComplianceCard({ label, status, date, days, onAdd, provider, exempt }: 
 }
 
 // ─── Overview Tab ─────────────────────────────────────────
-function OverviewTab({ vehicle: v, reminders, onRefresh }: { vehicle: Vehicle; reminders: Reminder[]; onRefresh: () => void }) {
+function OverviewTab({ vehicle: v, reminders, vehicleKeys, onRefresh, onAddKey, onEditKey }: {
+  vehicle: Vehicle;
+  reminders: Reminder[];
+  vehicleKeys: VehicleKey[];
+  onRefresh: () => void;
+  onAddKey: () => void;
+  onEditKey: (k: VehicleKey) => void;
+}) {
   const specs = [
     { label: 'Engine', value: v.engine_size_cc ? `${(v.engine_size_cc / 1000).toFixed(1)}L` : null },
     { label: 'Power', value: v.horsepower ? `${v.horsepower} hp` : null },
@@ -309,8 +355,100 @@ function OverviewTab({ vehicle: v, reminders, onRefresh }: { vehicle: Vehicle; r
           </div>
         )}
 
+        <KeysCard keys={vehicleKeys} onAdd={onAddKey} onEdit={onEditKey} vehicleId={v.id} onRefresh={onRefresh} />
+
+        <PaperworkChecklist vehicle={v} onRefresh={onRefresh} />
+
         <LocationCard vehicle={v} onRefresh={onRefresh} />
       </div>
+    </div>
+  );
+}
+
+// ─── Keys Card ───────────────────────────────────────────
+const KEY_TYPE_LABELS: Record<KeyType, string> = {
+  main: 'Main', spare: 'Spare', valet: 'Valet', other: 'Other',
+};
+const KEY_TYPE_COLORS: Record<KeyType, string> = {
+  main: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  spare: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+  valet: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
+  other: 'bg-white/8 text-chrome-dim border-white/10',
+};
+
+function KeysCard({ keys, onAdd, onEdit, vehicleId, onRefresh }: {
+  keys: VehicleKey[];
+  onAdd: () => void;
+  onEdit: (k: VehicleKey) => void;
+  vehicleId: string;
+  onRefresh: () => void;
+}) {
+  const supabase = createClient();
+
+  async function handleDelete(id: string) {
+    if (!confirm('Remove this key record?')) return;
+    await supabase.from('vehicle_keys').delete().eq('id', id);
+    onRefresh();
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Key className="w-4 h-4 text-amber-DEFAULT" />
+          <h3 className="font-display text-base text-chrome-bright">Keys</h3>
+          {keys.length > 0 && (
+            <span className="text-xs bg-amber-DEFAULT/10 text-amber-DEFAULT px-2 py-0.5 rounded-full font-mono">
+              {keys.length}
+            </span>
+          )}
+        </div>
+        <button onClick={onAdd}
+          className="btn-ghost rounded-lg px-3 py-1.5 text-xs flex items-center gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> Add Key
+        </button>
+      </div>
+
+      {keys.length === 0 ? (
+        <p className="text-sm text-chrome-dim">No keys recorded — click "Add Key" to start tracking.</p>
+      ) : (
+        <div className="space-y-2">
+          {keys.map(k => (
+            <div key={k.id}
+              className="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-white/3 border border-white/5 hover:border-white/10 transition-colors group">
+              <Key className="w-4 h-4 text-chrome-muted shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-xs px-2 py-0.5 rounded border font-medium ${KEY_TYPE_COLORS[k.key_type]}`}>
+                    {KEY_TYPE_LABELS[k.key_type]}
+                  </span>
+                  {k.label && (
+                    <span className="text-sm text-chrome-bright truncate">{k.label}</span>
+                  )}
+                </div>
+                {k.location && (
+                  <div className="text-xs text-chrome-dim mt-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> {k.location}
+                  </div>
+                )}
+                {k.notes && (
+                  <div className="text-xs text-chrome-muted mt-0.5">{k.notes}</div>
+                )}
+              </div>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <button onClick={() => onEdit(k)}
+                  className="w-7 h-7 rounded btn-ghost flex items-center justify-center text-chrome-dim hover:text-chrome-bright">
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDelete(k.id)}
+                  className="w-7 h-7 rounded btn-ghost flex items-center justify-center text-chrome-dim hover:text-red-400">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -391,7 +529,7 @@ function LocationPickerDynamic(props: any) {
 }
 
 // ─── Compliance Tab ───────────────────────────────────────
-function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, onAddTax, vehicleId, onRefresh }: any) {
+function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, onAddTax, vehicleId, registration, onRefresh }: any) {
   return (
     <div className="space-y-8">
       {/* MOT */}
@@ -433,9 +571,19 @@ function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, 
       <section>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-lg text-chrome-bright">Insurance Policies</h3>
-          <button onClick={onAddIns} className="btn-ghost rounded-lg px-3 py-2 text-xs flex items-center gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Add Policy
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={`https://ownvehicle.askmid.com/?vrm=${encodeURIComponent((registration ?? '').replace(/\s+/g, ''))}`}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-ghost rounded-lg px-3 py-2 text-xs flex items-center gap-1.5"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Check MID
+            </a>
+            <button onClick={onAddIns} className="btn-ghost rounded-lg px-3 py-2 text-xs flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Add Policy
+            </button>
+          </div>
         </div>
         {insurance.length === 0 ? (
           <EmptySection message="No insurance records" action={onAddIns} actionLabel="Add Policy" />
@@ -467,6 +615,9 @@ function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, 
           <button onClick={onAddTax} className="btn-ghost rounded-lg px-3 py-2 text-xs flex items-center gap-1.5">
             <Plus className="w-3.5 h-3.5" /> Add Tax
           </button>
+        </div>
+        <div className="mb-4">
+          <DvlaStatusChecker registration={registration} vehicleId={vehicleId} onSaved={onRefresh} />
         </div>
         {taxRecords.length === 0 ? (
           <EmptySection message="No tax records" action={onAddTax} actionLabel="Add Tax Record" />
@@ -703,12 +854,21 @@ function ValuationTab({ valuations, vehicle, maintenance, onRefresh }: { valuati
         </form>
       )}
 
+      <ValuationChart
+        valuations={valuations}
+        purchasePrice={vehicle.purchase_price}
+        purchaseDate={vehicle.purchase_date}
+        currentValue={vehicle.current_value}
+      />
+
       <MarketPricePanel
         make={vehicle.make}
         model={vehicle.model}
         year={vehicle.year}
         currentValue={vehicle.current_value}
         vehicleId={vehicle.id}
+        engineSizeCc={vehicle.engine_size_cc}
+        mileage={vehicle.mileage}
         onValueUpdate={onRefresh}
       />
 

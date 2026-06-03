@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   LayoutDashboard, Car, Bell, TrendingUp, Search,
-  Settings, LogOut, Shield, ChevronRight, Gauge, Map
+  Settings, LogOut, Shield, ChevronRight, Gauge, Map, CalendarDays, UserCircle2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/dashboard',  label: 'Dashboard',   icon: LayoutDashboard },
   { href: '/vehicles',   label: 'Fleet',        icon: Car },
   { href: '/map',        label: 'Map',          icon: Map },
+  { href: '/calendar',   label: 'Calendar',     icon: CalendarDays },
   { href: '/reminders',  label: 'Reminders',    icon: Bell },
   { href: '/valuation',  label: 'Valuation',    icon: TrendingUp },
   { href: '/search',     label: 'Search',       icon: Search },
@@ -22,6 +24,23 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [userRole, setUserRole] = useState('');
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserEmail(user.email ?? '');
+      // Try profile table first, fall back to email prefix
+      const { data: profile } = await supabase
+        .from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+      setUserName(profile?.full_name || user.email?.split('@')[0] || 'User');
+      setUserRole(profile?.role || 'client');
+    }
+    loadUser();
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -46,7 +65,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+      <nav className="flex-1 min-h-0 px-3 py-6 space-y-1 overflow-y-auto">
         <div className="px-3 mb-4">
           <span className="text-[10px] font-semibold tracking-[0.12em] uppercase text-chrome-muted">Navigation</span>
         </div>
@@ -73,14 +92,24 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom user section */}
-      <div className="px-3 py-4 border-t border-white/5">
-        <button
-          onClick={handleLogout}
-          className="nav-item w-full text-left hover:text-red-400 hover:bg-red-500/5"
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          <span>Sign Out</span>
-        </button>
+      <div className="shrink-0 px-3 py-3 border-t border-white/5">
+        {/* User info + sign out in one row */}
+        <div className="flex items-center gap-2 px-2 py-2 rounded-lg bg-white/3 border border-white/5">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: 'linear-gradient(135deg, #e8a800, #d4960a)' }}>
+            <UserCircle2 className="w-3.5 h-3.5 text-obsidian-900" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold text-chrome-bright truncate capitalize leading-tight">{userName}</div>
+            <div className={`text-[10px] font-semibold leading-tight ${userRole === 'admin' ? 'text-amber-DEFAULT' : 'text-blue-400'}`}>
+              {userRole === 'admin' ? '★ Admin' : 'Client'}
+            </div>
+          </div>
+          <button onClick={handleLogout} title="Sign Out"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-chrome-muted hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0">
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Ambient glow */}

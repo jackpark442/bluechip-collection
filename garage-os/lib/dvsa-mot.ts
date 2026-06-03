@@ -44,11 +44,16 @@ async function getAccessToken(): Promise<string> {
     scope,
   });
 
-  const res = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  });
+  let res: Response;
+  try {
+    res = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+  } catch (err: any) {
+    throw new Error(`DVSA token network error: ${err?.message ?? String(err)}`);
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -197,13 +202,15 @@ export async function lookupMotByRegistration(
   const tests = data.motTests ?? [];
   const latest = tests[0]; // sorted newest-first by API
 
-  const advisories = latest?.rfrAndComments
-    .filter(r => r.type === 'ADVISORY')
-    .map(r => r.text) ?? [];
+  const rfrItems = latest?.rfrAndComments ?? [];
 
-  const failures = latest?.rfrAndComments
+  const advisories = rfrItems
+    .filter(r => r.type === 'ADVISORY')
+    .map(r => r.text);
+
+  const failures = rfrItems
     .filter(r => r.type === 'MAJOR' || r.type === 'DANGEROUS' || r.type === 'MINOR')
-    .map(r => `[${r.type}] ${r.text}`) ?? [];
+    .map(r => `[${r.type}] ${r.text}`);
 
   const engineCc = data.engineSize ? parseInt(data.engineSize, 10) : undefined;
 
@@ -221,11 +228,14 @@ export async function lookupMotByRegistration(
           testDate: latest.completedDate,
           expiryDate: latest.expiryDate,
           result: latest.testResult,
-          mileage:
-            latest.odometerValue && latest.odometerResultType === 'READ'
-              ? parseInt(latest.odometerValue, 10)
-              : undefined,
-          mileageUnit: latest.odometerUnit,
+          mileage: (() => {
+            if (!latest.odometerValue || latest.odometerResultType === 'NO_ODOMETER' || latest.odometerResultType === 'UNREADABLE') return undefined;
+            const raw = parseInt(latest.odometerValue, 10);
+            if (isNaN(raw)) return undefined;
+            // Convert km to miles if needed
+            return latest.odometerUnit === 'km' ? Math.round(raw * 0.621371) : raw;
+          })(),
+          mileageUnit: 'mi',
           testNumber: latest.motTestNumber,
           advisories,
           failures,

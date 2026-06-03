@@ -486,26 +486,27 @@ SELECT
   v.mileage,
   v.current_value,
   v.cover_image_url,
-  
-  -- Latest MOT
-  mot.expiry_date AS mot_expiry,
+  v.first_mot_due_date,
+
+  -- Latest MOT (falls back to first_mot_due_date for new vehicles)
+  COALESCE(mot.expiry_date, v.first_mot_due_date) AS mot_expiry,
   mot.result AS mot_result,
-  
+
   -- Latest Insurance
   ins.end_date AS insurance_expiry,
   ins.provider AS insurance_provider,
-  
+
   -- Latest Tax
   tax.end_date AS tax_expiry,
   tax.is_exempt AS tax_exempt,
-  
-  -- Days until expiry (smallest of the three)
+
+  -- Days until expiry
   LEAST(
-    mot.expiry_date - CURRENT_DATE,
+    COALESCE(mot.expiry_date, v.first_mot_due_date) - CURRENT_DATE,
     ins.end_date - CURRENT_DATE,
     CASE WHEN tax.is_exempt THEN 9999 ELSE tax.end_date - CURRENT_DATE END
   ) AS days_to_nearest_expiry
-  
+
 FROM vehicles v
 LEFT JOIN LATERAL (
   SELECT * FROM mot_records WHERE vehicle_id = v.id ORDER BY expiry_date DESC LIMIT 1

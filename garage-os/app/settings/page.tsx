@@ -11,9 +11,16 @@ export default async function SettingsPage() {
   const { data: profile } = await supabase
     .from('profiles').select('*').eq('id', user.id).single();
 
+  // Fetch client accounts linked to this admin
+  const { data: clients } = await supabase
+    .from('profiles')
+    .select('id, email, full_name, role, created_at')
+    .eq('admin_id', user.id)
+    .eq('role', 'client');
+
   return (
     <AppLayout>
-      <SettingsClient user={user} profile={profile} />
+      <SettingsClient user={user} profile={profile} clients={clients || []} />
     </AppLayout>
   );
 }

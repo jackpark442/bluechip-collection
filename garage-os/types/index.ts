@@ -15,6 +15,24 @@ export type ServiceType = 'full_service' | 'interim_service' | 'oil_change' | 't
 export type DocumentCategory = 'v5c_logbook' | 'mot_certificate' | 'insurance_certificate' | 'tax_document' | 'service_invoice' | 'purchase_invoice' | 'warranty' | 'manual' | 'history_report' | 'valuation_report' | 'modification_certificate' | 'import_document' | 'other';
 export type ReminderType = 'mot_due' | 'insurance_due' | 'tax_due' | 'service_due' | 'tyre_check' | 'fluid_check' | 'custom';
 export type ReminderStatus = 'pending' | 'acknowledged' | 'completed' | 'snoozed';
+export type KeyType = 'main' | 'spare' | 'valet' | 'other';
+export type JobPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type JobStatus = 'todo' | 'in_progress' | 'done';
+
+export interface VehicleJob {
+  id: string;
+  vehicle_id: string;
+  owner_id: string;
+  title: string;
+  description?: string;
+  priority: JobPriority;
+  status: JobStatus;
+  due_date?: string;
+  requested_by?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Profile {
   id: string;
@@ -50,6 +68,18 @@ export interface Vehicle {
   last_valued_date?: string;
   cover_image_url?: string;
   notes?: string;
+  first_mot_due_date?: string;
+  // Paperwork checklist
+  has_v5c?: boolean;
+  has_service_book?: boolean;
+  has_owners_manual?: boolean;
+  has_spare_key?: boolean;
+  has_purchase_invoice?: boolean;
+  has_warranty_docs?: boolean;
+  has_mot_certificates?: boolean;
+  has_insurance_cert?: boolean;
+  has_stamped_history?: boolean;
+  has_toolkit?: boolean;
   location_name?: string;
   location_address?: string;
   location_lat?: number;
@@ -161,6 +191,18 @@ export interface Document {
   created_at: string;
 }
 
+export interface VehicleKey {
+  id: string;
+  vehicle_id: string;
+  owner_id: string;
+  key_type: KeyType;
+  label?: string;
+  location?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Reminder {
   id: string;
   vehicle_id?: string;
@@ -202,7 +244,9 @@ export interface FleetOverview extends Vehicle {
   insurance_provider?: string;
   tax_expiry?: string;
   tax_exempt?: boolean;
+  tax_exemption_reason?: string;
   days_to_nearest_expiry?: number;
+  first_mot_due_date?: string;
 }
 
 // Dashboard stats

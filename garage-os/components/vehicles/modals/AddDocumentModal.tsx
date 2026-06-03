@@ -11,6 +11,10 @@ interface Props { vehicleId: string; onClose: () => void; onSave: () => void; }
 
 const DOC_CATEGORIES = Object.entries(DOCUMENT_CATEGORY_LABELS) as [DocumentCategory, string][];
 
+function F({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><label className="block text-xs text-chrome-dim mb-1.5 uppercase tracking-wider font-medium">{label}</label>{children}</div>;
+}
+
 export default function AddDocumentModal({ vehicleId, onClose, onSave }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -69,10 +73,6 @@ export default function AddDocumentModal({ vehicleId, onClose, onSave }: Props) 
     onSave();
     onClose();
   }
-
-  const F = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div><label className="block text-xs text-chrome-dim mb-1.5 uppercase tracking-wider font-medium">{label}</label>{children}</div>
-  );
 
   return (
     <Modal title="Upload Document" onClose={onClose}>

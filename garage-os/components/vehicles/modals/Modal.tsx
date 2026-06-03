@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface Props {
@@ -11,7 +12,10 @@ interface Props {
 }
 
 export default function Modal({ title, onClose, children, width = 'max-w-lg' }: Props) {
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
     }
@@ -23,9 +27,11 @@ export default function Modal({ title, onClose, children, width = 'max-w-lg' }: 
     };
   }, [onClose]);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background: 'rgba(5,5,7,0.85)', backdropFilter: 'blur(8px)' }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
@@ -42,6 +48,7 @@ export default function Modal({ title, onClose, children, width = 'max-w-lg' }: 
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

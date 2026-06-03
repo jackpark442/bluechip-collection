@@ -2,9 +2,21 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, Grid, List, Search, Filter, Car } from 'lucide-react';
+import { Plus, Grid, List, Search, Car } from 'lucide-react';
 import type { FleetOverview, VehicleCategory, VehicleStatus } from '@/types';
 import { formatCurrency, formatDate, daysUntil, CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS, getVehicleDisplayName } from '@/lib/utils';
+
+function getTrafficLight(v: FleetOverview): 'red' | 'amber' | 'green' | 'none' {
+  const motDays = daysUntil(v.mot_expiry);
+  const insDays = daysUntil(v.insurance_expiry);
+  const taxDays = v.tax_exempt ? null : daysUntil(v.tax_expiry);
+  const all = [motDays, insDays, taxDays].filter(d => d !== null) as number[];
+  if (all.length === 0) return 'none';
+  const min = Math.min(...all);
+  if (min < 0 || all.some(d => d < 0)) return 'red';
+  if (min <= 30) return 'amber';
+  return 'green';
+}
 
 interface Props { fleet: FleetOverview[] }
 
@@ -133,6 +145,7 @@ export default function FleetClient({ fleet }: Props) {
                 <tr key={v.id} className="cursor-pointer" onClick={() => window.location.href = `/vehicles/${v.id}`}>
                   <td>
                     <div className="flex items-center gap-3">
+                      {(() => { const lc = TRAFFIC_LIGHT_COLORS[getTrafficLight(v)]; return <span title={lc.label} className={`w-2 h-2 rounded-full ${lc.dot} ring-1 ${lc.ring} shrink-0`} />; })()}
                       {v.cover_image_url ? (
                         <img src={v.cover_image_url} className="w-10 h-10 rounded-lg object-cover" alt="" />
                       ) : (
@@ -149,7 +162,7 @@ export default function FleetClient({ fleet }: Props) {
                   <td><span className="font-mono text-sm">{v.registration?.toUpperCase() || '—'}</span></td>
                   <td><span className="text-sm">{CATEGORY_LABELS[v.category]}</span></td>
                   <td><span className={`status-badge ${STATUS_COLORS[v.status]}`}>{STATUS_LABELS[v.status]}</span></td>
-                  <td className="text-right"><ExpiryCell date={v.mot_expiry} /></td>
+                  <td className="text-right"><ExpiryCell date={v.mot_expiry} firstMot={!v.mot_result && !!v.first_mot_due_date} /></td>
                   <td className="text-right"><ExpiryCell date={v.insurance_expiry} /></td>
                   <td className="text-right font-mono text-sm">{formatCurrency(v.current_value)}</td>
                 </tr>
@@ -162,13 +175,25 @@ export default function FleetClient({ fleet }: Props) {
   );
 }
 
+const TRAFFIC_LIGHT_COLORS = {
+  red:   { bar: 'bg-red-500',    dot: 'bg-red-500',    ring: 'ring-red-500/40',    label: 'Needs Attention' },
+  amber: { bar: 'bg-amber-400',  dot: 'bg-amber-400',  ring: 'ring-amber-400/40',  label: 'Coming Up' },
+  green: { bar: 'bg-emerald-500',dot: 'bg-emerald-500',ring: 'ring-emerald-500/40',label: 'All Good' },
+  none:  { bar: 'bg-white/10',   dot: 'bg-white/20',   ring: 'ring-white/10',      label: 'No Data' },
+};
+
 function VehicleGridCard({ vehicle: v }: { vehicle: FleetOverview }) {
   const motDays = daysUntil(v.mot_expiry);
   const insDays = daysUntil(v.insurance_expiry);
   const taxDays = v.tax_exempt ? null : daysUntil(v.tax_expiry);
+  const light = getTrafficLight(v);
+  const lc = TRAFFIC_LIGHT_COLORS[light];
+  const isFirstMot = !v.mot_result && !!v.first_mot_due_date;
 
   return (
     <Link href={`/vehicles/${v.id}`} className="glass-card glass-card-hover rounded-xl overflow-hidden block group">
+      {/* Traffic light status bar */}
+      <div className={`h-1 w-full ${lc.bar} transition-colors`} />
       <div className="relative h-44 bg-obsidian-700 overflow-hidden">
         {v.cover_image_url ? (
           <img src={v.cover_image_url} alt={getVehicleDisplayName(v)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -182,7 +207,10 @@ function VehicleGridCard({ vehicle: v }: { vehicle: FleetOverview }) {
           <span className="text-[10px] font-semibold tracking-wider uppercase text-chrome-dim bg-obsidian-900/80 px-2 py-1 rounded">
             {CATEGORY_LABELS[v.category]}
           </span>
-          <span className={`status-badge ${STATUS_COLORS[v.status]}`}>{STATUS_LABELS[v.status]}</span>
+          <div className="flex items-center gap-2">
+            <span className={`status-badge ${STATUS_COLORS[v.status]}`}>{STATUS_LABELS[v.status]}</span>
+            <span title={lc.label} className={`w-2.5 h-2.5 rounded-full ${lc.dot} ring-2 ${lc.ring} shrink-0`} />
+          </div>
         </div>
         <div className="absolute bottom-3 left-4 right-4">
           <div className="font-display text-lg text-chrome-bright leading-tight">{v.make} {v.model}</div>
@@ -198,9 +226,9 @@ function VehicleGridCard({ vehicle: v }: { vehicle: FleetOverview }) {
       <div className="px-4 py-3">
         {/* Compliance indicators */}
         <div className="grid grid-cols-3 gap-2 text-center mb-3">
-          <CompliancePill label="MOT" days={motDays} />
+          <CompliancePill label={isFirstMot ? '1st MOT' : 'MOT'} days={motDays} />
           <CompliancePill label="Insurance" days={insDays} />
-          <CompliancePill label="Tax" days={taxDays} exempt={v.tax_exempt} />
+          <CompliancePill label="Tax" days={taxDays} exempt={v.tax_exempt} sorn={v.tax_exemption_reason === 'SORN'} />
         </div>
 
         {/* Value */}
@@ -215,7 +243,13 @@ function VehicleGridCard({ vehicle: v }: { vehicle: FleetOverview }) {
   );
 }
 
-function CompliancePill({ label, days, exempt }: { label: string; days: number | null; exempt?: boolean }) {
+function CompliancePill({ label, days, exempt, sorn }: { label: string; days: number | null; exempt?: boolean; sorn?: boolean }) {
+  if (sorn) return (
+    <div className="text-center">
+      <div className="text-[10px] text-chrome-muted mb-0.5">{label}</div>
+      <div className="text-xs text-amber-400 font-semibold">SORN</div>
+    </div>
+  );
   if (exempt) return (
     <div className="text-center">
       <div className="text-[10px] text-chrome-muted mb-0.5">{label}</div>
@@ -234,13 +268,14 @@ function CompliancePill({ label, days, exempt }: { label: string; days: number |
   );
 }
 
-function ExpiryCell({ date }: { date?: string }) {
+function ExpiryCell({ date, firstMot }: { date?: string; firstMot?: boolean }) {
   const days = daysUntil(date);
   const color = days === null ? 'text-chrome-muted' :
     days < 0 ? 'text-red-400' : days <= 7 ? 'text-red-400' : days <= 30 ? 'text-amber-400' : 'text-emerald-400';
   return (
     <span className={`text-sm font-mono ${color}`}>
-      {!date ? '—' : days !== null && days < 0 ? 'Expired' : days === 0 ? 'Today' : `${formatDate(date)}`}
+      {!date ? '—' : days !== null && days < 0 ? 'Overdue' : days === 0 ? 'Today' : `${formatDate(date)}`}
+      {firstMot && date ? <span className="text-[10px] text-chrome-muted ml-1 font-sans">1st</span> : null}
     </span>
   );
 }

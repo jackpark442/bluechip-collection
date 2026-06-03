@@ -1,216 +1,123 @@
 'use client';
 
-import { useState } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, ExternalLink, AlertTriangle, Globe } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
-import type { MarketSearchResult } from '@/lib/market-search';
+import { ExternalLink } from 'lucide-react';
 
 interface Props {
   make: string;
   model: string;
   year: number;
+  engineSizeCc?: number | null;
+  mileage?: number | null;
   currentValue?: number | null;
   vehicleId: string;
   onValueUpdate?: () => void;
 }
 
-export default function MarketPricePanel({ make, model, year, currentValue, vehicleId, onValueUpdate }: Props) {
-  const [state, setState] = useState<
-    | { status: 'idle' }
-    | { status: 'loading' }
-    | { status: 'success'; data: MarketSearchResult }
-    | { status: 'error'; message: string }
-  >({ status: 'idle' });
-
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  async function fetchMarketData() {
-    setState({ status: 'loading' });
-    try {
-      const res = await fetch(
-        `/api/market/lookup?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&year=${year}`
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setState({ status: 'error', message: data.error || 'Lookup failed' });
-        return;
-      }
-      setState({ status: 'success', data });
-    } catch {
-      setState({ status: 'error', message: 'Network error' });
-    }
+function buildAutotraderUrl(make: string, model: string, year: number, engineSizeCc?: number | null, mileage?: number | null) {
+  const params = new URLSearchParams();
+  params.set('make', make.toUpperCase());
+  params.set('model', model.toUpperCase());
+  params.set('year-from', String(year - 1));
+  params.set('year-to', String(year + 1));
+  if (engineSizeCc) {
+    params.set('engine-size-from', String(Math.max(500, engineSizeCc - 200)));
+    params.set('engine-size-to', String(engineSizeCc + 200));
   }
-
-  async function saveAsCurrentValue(value: number) {
-    setSaving(true);
-    try {
-      const { createClient } = await import('@/lib/supabase/client');
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      await supabase
-        .from('vehicles')
-        .update({ current_value: value, last_valued_date: new Date().toISOString().split('T')[0] })
-        .eq('id', vehicleId)
-        .eq('owner_id', user.id);
-
-      await supabase.from('valuations').insert({
-        vehicle_id: vehicleId,
-        owner_id: user.id,
-        value,
-        source: 'Web Market Search',
-        notes: `Average asking price from online listings for ${year} ${make} ${model}`,
-        valuation_date: new Date().toISOString().split('T')[0],
-      });
-
-      onValueUpdate?.();
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } finally {
-      setSaving(false);
-    }
+  if (mileage) {
+    params.set('maximum-mileage', String(Math.max(10000, Math.round(mileage * 1.2 / 1000) * 1000)));
   }
-
-  return (
-    <div className="glass-card rounded-xl overflow-hidden">
-      <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-        <div>
-          <h3 className="font-display text-base text-chrome-bright">Market Prices</h3>
-          <p className="text-xs text-chrome-dim mt-0.5">
-            Live listings from PistonHeads, Car & Classic, Collecting Cars &amp; more
-          </p>
-        </div>
-        <button
-          onClick={fetchMarketData}
-          disabled={state.status === 'loading'}
-          className="btn-ghost rounded-lg px-3 py-2 text-xs flex items-center gap-2 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${state.status === 'loading' ? 'animate-spin' : ''}`} />
-          {state.status === 'idle' ? 'Search Market' : state.status === 'loading' ? 'Searching...' : 'Refresh'}
-        </button>
-      </div>
-
-      <div className="p-6">
-        {state.status === 'idle' && (
-          <div className="text-center py-8">
-            <Globe className="w-8 h-8 text-chrome-muted mx-auto mb-3 opacity-40" />
-            <p className="text-sm text-chrome-dim mb-2">Search the web for current market prices</p>
-            <p className="text-xs text-chrome-muted">Scans PistonHeads, Car & Classic, Collecting Cars, AutoTrader and more</p>
-          </div>
-        )}
-
-        {state.status === 'error' && (
-          <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-red-400 font-medium">Search failed</p>
-              <p className="text-xs text-red-400/70 mt-1">{state.message}</p>
-              {state.message.includes('credentials') && (
-                <p className="text-xs text-chrome-dim mt-2">
-                  Add GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID to your .env.local file.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {state.status === 'success' && (
-          <div className="space-y-6">
-            {/* Price summary */}
-            <div className="grid grid-cols-3 gap-3">
-              <PriceStat label="Avg Asking" value={state.data.averagePrice} compare={currentValue} />
-              <PriceStat label="Lowest Found" value={state.data.lowestPrice} compare={currentValue} />
-              <PriceStat label="Highest Found" value={state.data.highestPrice} compare={currentValue} />
-            </div>
-
-            {/* Update value prompt */}
-            {state.data.averagePrice && (
-              <div className="flex items-center justify-between bg-amber-DEFAULT/5 border border-amber-DEFAULT/20 rounded-lg px-4 py-3">
-                <div>
-                  <p className="text-sm text-chrome-bright">
-                    Update current value to{' '}
-                    <span className="text-amber-DEFAULT font-mono font-semibold">
-                      {formatCurrency(state.data.averagePrice)}
-                    </span>?
-                  </p>
-                  <p className="text-xs text-chrome-dim mt-0.5">
-                    Average from {state.data.prices.length} listings found online
-                  </p>
-                </div>
-                <button
-                  onClick={() => saveAsCurrentValue(state.data.averagePrice!)}
-                  disabled={saving || saved}
-                  className="btn-amber rounded-lg px-4 py-2 text-xs shrink-0 ml-4 disabled:opacity-60"
-                >
-                  {saved ? '✓ Saved' : saving ? 'Saving...' : 'Update Value'}
-                </button>
-              </div>
-            )}
-
-            {/* Listings */}
-            {state.data.listings.length > 0 ? (
-              <div>
-                <h4 className="text-xs font-semibold text-chrome-dim uppercase tracking-wider mb-3">
-                  Listings Found ({state.data.listings.length})
-                </h4>
-                <div className="space-y-2">
-                  {state.data.listings.map((listing, i) => (
-                    <a
-                      key={i}
-                      href={listing.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-start gap-4 p-3 rounded-lg bg-white/2 hover:bg-white/5 transition-colors group"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-semibold text-amber-DEFAULT/70 uppercase tracking-wider bg-amber-DEFAULT/10 rounded px-1.5 py-0.5 shrink-0">
-                            {listing.source}
-                          </span>
-                          {listing.displayPrice && (
-                            <span className="font-mono text-amber-DEFAULT font-semibold text-sm">
-                              {listing.displayPrice}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm text-chrome-bright truncate">{listing.title}</div>
-                        <div className="text-xs text-chrome-dim mt-0.5 line-clamp-2">{listing.snippet}</div>
-                      </div>
-                      <ExternalLink className="w-3.5 h-3.5 text-chrome-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-6 text-chrome-dim text-sm">
-                No listings found — try a broader search or check the make/model spelling
-              </div>
-            )}
-
-            <p className="text-xs text-chrome-muted">
-              Results from Google Search · {new Date(state.data.fetchedAt).toLocaleTimeString('en-GB')}
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  params.set('postcode', 'SW1A1AA');
+  params.set('radius', '1500');
+  return `https://www.autotrader.co.uk/car-search?${params.toString()}`;
 }
 
-function PriceStat({ label, value, compare }: { label: string; value: number | null; compare?: number | null }) {
-  const diff = value && compare ? value - compare : null;
+function buildPistonHeadsUrl(make: string, model: string, year: number) {
+  const q = encodeURIComponent(`${make} ${model} ${year}`);
+  return `https://www.pistonheads.com/classifieds?q=${q}`;
+}
+
+function buildCarAndClassicUrl(make: string, model: string, year: number) {
+  const q = encodeURIComponent(`${make} ${model} ${year}`);
+  return `https://www.carandclassic.com/search/?q=${q}`;
+}
+
+function buildCollectingCarsUrl(make: string, model: string) {
+  const q = encodeURIComponent(`${make} ${model}`);
+  return `https://collectingcars.com/for-sale/?search=${q}`;
+}
+
+function buildHagertyUrl(make: string, model: string, year: number) {
+  const q = encodeURIComponent(`${year} ${make} ${model}`);
+  return `https://www.hagerty.com/valuation-tools/?search=${q}`;
+}
+
+const SITES = [
+  {
+    name: 'AutoTrader',
+    description: 'Largest UK used car marketplace',
+    color: 'text-orange-400',
+    bg: 'bg-orange-500/8 border-orange-500/20 hover:border-orange-500/40',
+    url: (make: string, model: string, year: number, cc?: number | null, mi?: number | null) =>
+      buildAutotraderUrl(make, model, year, cc, mi),
+  },
+  {
+    name: 'PistonHeads',
+    description: 'Performance & sports car classifieds',
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/8 border-blue-500/20 hover:border-blue-500/40',
+    url: (make: string, model: string, year: number) => buildPistonHeadsUrl(make, model, year),
+  },
+  {
+    name: 'Car & Classic',
+    description: 'Classic & vintage car marketplace',
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/8 border-emerald-500/20 hover:border-emerald-500/40',
+    url: (make: string, model: string, year: number) => buildCarAndClassicUrl(make, model, year),
+  },
+  {
+    name: 'Collecting Cars',
+    description: 'Curated auction platform',
+    color: 'text-purple-400',
+    bg: 'bg-purple-500/8 border-purple-500/20 hover:border-purple-500/40',
+    url: (make: string, model: string, year: number) => buildCollectingCarsUrl(make, model),
+  },
+  {
+    name: 'Hagerty Valuation',
+    description: 'Classic car valuation tool',
+    color: 'text-amber-400',
+    bg: 'bg-amber-500/8 border-amber-500/20 hover:border-amber-500/40',
+    url: (make: string, model: string, year: number) => buildHagertyUrl(make, model, year),
+  },
+];
+
+export default function MarketPricePanel({ make, model, year, engineSizeCc, mileage }: Props) {
   return (
-    <div className="glass-card rounded-lg p-3 bg-white/2">
-      <div className="text-[10px] text-chrome-muted uppercase tracking-wider mb-1">{label}</div>
-      <div className="font-display text-lg text-chrome-bright">{value ? formatCurrency(value) : '—'}</div>
-      {diff !== null && (
-        <div className={`text-xs mt-0.5 flex items-center gap-1 ${diff >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {diff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-          {diff >= 0 ? '+' : ''}{formatCurrency(diff)} vs yours
-        </div>
-      )}
+    <div className="glass-card rounded-xl overflow-hidden">
+      <div className="px-6 py-4 border-b border-white/5">
+        <h3 className="font-display text-base text-chrome-bright">Market Search</h3>
+        <p className="text-xs text-chrome-dim mt-0.5">
+          Search live listings for {year} {make} {model}
+          {engineSizeCc ? ` · ${(engineSizeCc / 1000).toFixed(1)}L` : ''}
+          {mileage ? ` · ~${mileage.toLocaleString()} miles` : ''}
+        </p>
+      </div>
+      <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {SITES.map(site => (
+          <a
+            key={site.name}
+            href={site.url(make, model, year, engineSizeCc, mileage)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${site.bg}`}
+          >
+            <div>
+              <div className={`text-sm font-semibold ${site.color}`}>{site.name}</div>
+              <div className="text-xs text-chrome-muted mt-0.5">{site.description}</div>
+            </div>
+            <ExternalLink className={`w-4 h-4 shrink-0 ${site.color} opacity-60`} />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

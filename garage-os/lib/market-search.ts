@@ -1,5 +1,4 @@
-// Market price search — scrapes Car & Classic directly
-// Switches to Google Custom Search when GOOGLE_SEARCH_API_KEY is working
+// Market price search — AutoTrader-first via Google Custom Search
 
 export interface SearchListing {
   title: string;
@@ -14,156 +13,195 @@ export interface MarketSearchResult {
   make: string;
   model: string;
   year: number;
+  engineSizeCc?: number;
+  mileage?: number;
   listings: SearchListing[];
   prices: number[];
   averagePrice: number | null;
   lowestPrice: number | null;
   highestPrice: number | null;
+  autotraderUrl: string;
   fetchedAt: string;
 }
 
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-GB,en;q=0.9',
-};
-
 function extractPrice(text: string): number | null {
-  const match = text.match(/£\s*([\d,]+)/);
-  if (match) {
-    const value = parseInt(match[1].replace(/,/g, ''));
-    if (value >= 500 && value <= 10_000_000) return value;
+  if (!text) return null;
+  const patterns = [
+    /£\s*([\d,]+(?:\.\d{2})?)/,
+    /GBP\s*([\d,]+)/i,
+    /price[:\s]+(\d[\d,]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const value = parseInt(match[1].replace(/,/g, '').split('.')[0]);
+      if (value >= 500 && value <= 10_000_000) return value;
+    }
   }
   return null;
 }
 
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-}
+/** Build a direct AutoTrader search URL with all available filters */
+function buildAutotraderUrl(make: string, model: string, year: number, engineSizeCc?: number, mileage?: number): string {
+  const params = new URLSearchParams();
+  params.set('make', make.toUpperCase().replace(/\s+/g, '%20'));
+  params.set('model', model.toUpperCase().replace(/\s+/g, '%20'));
 
-async function searchCarAndClassic(make: string, model: string, year: number): Promise<SearchListing[]> {
-  const query = encodeURIComponent(`${make} ${model}`);
-  const url = `https://www.carandclassic.com/search/?q=${query}&country=gb`;
+  // Year range ±1 year
+  params.set('year-from', String(year - 1));
+  params.set('year-to', String(year + 1));
 
-  try {
-    const res = await fetch(url, { headers: HEADERS });
-    if (!res.ok) return [];
-
-    const html = await res.text();
-    const listings: SearchListing[] = [];
-
-    // Split on listing anchor tags
-    const blocks = html.split(/<a\s+href="(\/(?:auctions|l)\/[^"]+)"/);
-
-    for (let i = 1; i < blocks.length - 1 && listings.length < 8; i += 2) {
-      const href = blocks[i];
-      const block = blocks[i + 1];
-
-      const titleMatch = block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/);
-      if (!titleMatch) continue;
-      const title = stripTags(titleMatch[1]);
-      if (!title || title.length < 4) continue;
-
-      // Only include if it matches the make
-      if (!title.toLowerCase().includes(make.toLowerCase().split(' ')[0])) continue;
-
-      const priceMatch = block.match(/£[\d,]+/);
-      const priceStr = priceMatch?.[0] || '';
-      const price = extractPrice(priceStr);
-
-      const specsMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-      const specs = specsMatch ? stripTags(specsMatch[1]) : '';
-
-      listings.push({
-        title,
-        url: `https://www.carandclassic.com${href}`,
-        snippet: [priceStr, specs].filter(Boolean).join(' · ') || 'View on Car & Classic',
-        source: 'Car & Classic',
-        price,
-        displayPrice: price ? `£${price.toLocaleString('en-GB')}` : null,
-      });
-    }
-
-    return listings;
-  } catch {
-    return [];
+  // Engine size range ±200cc
+  if (engineSizeCc && engineSizeCc > 0) {
+    const lower = Math.max(500, engineSizeCc - 200);
+    const upper = engineSizeCc + 200;
+    params.set('engine-size-from', String(lower));
+    params.set('engine-size-to', String(upper));
   }
+
+  // Mileage upper bound — vehicles with up to 20% more miles
+  if (mileage && mileage > 0) {
+    const maxMileage = Math.round(mileage * 1.2 / 1000) * 1000; // round to nearest 1000
+    params.set('maximum-mileage', String(Math.max(maxMileage, 10000)));
+  }
+
+  params.set('postcode', 'SW1A1AA'); // London — nationwide effectively
+  params.set('radius', '1500');
+  params.set('sort', 'relevance');
+
+  return `https://www.autotrader.co.uk/car-search?${params.toString()}`;
 }
 
-async function searchGoogleCustomSearch(make: string, model: string, year: number): Promise<SearchListing[]> {
+async function searchGoogleCustomSearch(
+  make: string,
+  model: string,
+  year: number,
+  engineSizeCc?: number,
+  mileage?: number,
+): Promise<SearchListing[]> {
   const apiKey = process.env.GOOGLE_SEARCH_API_KEY!;
   const engineId = process.env.GOOGLE_SEARCH_ENGINE_ID!;
 
-  const query = encodeURIComponent(`${year} ${make} ${model} for sale UK £`);
-  const res = await fetch(
-    `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${engineId}&q=${query}&num=10&gl=uk&hl=en`
-  );
+  // Engine size as a human-readable string e.g. "2.0" or "3.5"
+  const engineStr = engineSizeCc ? `${(engineSizeCc / 1000).toFixed(1)}` : '';
 
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error?.message || `Google Search error: ${res.status}`);
+  // Primary: AutoTrader with full detail. Secondary: broader market.
+  const queries = [
+    `site:autotrader.co.uk ${make} ${model} ${year}${engineStr ? ` ${engineStr}` : ''}`,
+    `${make} ${model} ${year}${engineStr ? ` ${engineStr}` : ''} for sale`,
+  ];
+
+  const allItems: any[] = [];
+
+  for (const q of queries) {
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${engineId}&q=${encodeURIComponent(q)}&num=10&gl=uk&hl=en`
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || `Google Search error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (data.items?.length) {
+        allItems.push(...data.items);
+        // If we got AutoTrader results from first query, also run second for extra breadth
+        if (q.includes('site:autotrader.co.uk') && data.items.length >= 3) continue;
+        break;
+      }
+    } catch (err) {
+      if (allItems.length === 0) throw err; // only rethrow if nothing yet
+    }
   }
 
-  const data = await res.json();
+  // Deduplicate by URL
+  const seen = new Set<string>();
+  const listings: SearchListing[] = [];
 
-  return (data.items || []).map((item: any) => {
-    const combined = `${item.title} ${item.snippet}`;
-    const price = extractPrice(combined);
+  for (const item of allItems) {
+    if (seen.has(item.link)) continue;
+    seen.add(item.link);
+
+    // Pull price from structured data if available
+    const pagemap = item.pagemap || {};
+    const offerPrice = pagemap.offer?.[0]?.price || pagemap.product?.[0]?.price || '';
+    const metatags = pagemap.metatags?.[0] || {};
+    const metaPrice = metatags['og:price:amount'] || metatags['product:price:amount'] || '';
+
+    const combined = `${item.title} ${item.snippet} ${offerPrice} ${metaPrice}`;
+    const price =
+      extractPrice(offerPrice ? `£${offerPrice}` : '') ||
+      extractPrice(metaPrice ? `£${metaPrice}` : '') ||
+      extractPrice(combined);
+
     let source = 'Web';
-    try {
-      source = new URL(item.link).hostname.replace('www.', '');
-    } catch {}
+    try { source = new URL(item.link).hostname.replace('www.', ''); } catch {}
 
-    return {
+    // Bump AutoTrader listings to the front
+    listings.push({
       title: item.title,
       url: item.link,
-      snippet: item.snippet,
+      snippet: item.snippet || '',
       source,
       price,
       displayPrice: price ? `£${price.toLocaleString('en-GB')}` : null,
-    };
+    });
+  }
+
+  // Sort: AutoTrader first, then by price
+  listings.sort((a, b) => {
+    const aAt = a.source.includes('autotrader') ? 0 : 1;
+    const bAt = b.source.includes('autotrader') ? 0 : 1;
+    if (aAt !== bAt) return aAt - bAt;
+    if (a.price && b.price) return a.price - b.price;
+    return 0;
   });
+
+  return listings;
 }
 
 export async function searchMarketPrices(
   make: string,
   model: string,
-  year: number
+  year: number,
+  engineSizeCc?: number,
+  mileage?: number,
 ): Promise<MarketSearchResult> {
-  let listings: SearchListing[] = [];
+  const autotraderUrl = buildAutotraderUrl(make, model, year, engineSizeCc, mileage);
 
-  // Use Google if credentials are configured and working, else fall back to scraping
-  const hasGoogle = process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_ENGINE_ID;
+  const listings = await searchGoogleCustomSearch(make, model, year, engineSizeCc, mileage);
 
-  if (hasGoogle) {
-    try {
-      listings = await searchGoogleCustomSearch(make, model, year);
-    } catch (e: any) {
-      console.log('[market] Google failed, falling back to scraping:', e.message);
-      listings = await searchCarAndClassic(make, model, year);
-    }
-  } else {
-    listings = await searchCarAndClassic(make, model, year);
-  }
-
+  // Only use prices from listings that actually have prices (exclude nulls)
   const prices = listings
     .map(l => l.price)
     .filter((p): p is number => p !== null)
     .sort((a, b) => a - b);
 
-  const averagePrice = prices.length
-    ? Math.round(prices.reduce((s, p) => s + p, 0) / prices.length)
+  // Trim outliers — remove bottom/top 10% if enough data
+  let trimmedPrices = prices;
+  if (prices.length >= 5) {
+    const trim = Math.floor(prices.length * 0.1);
+    trimmedPrices = prices.slice(trim, prices.length - trim);
+  }
+
+  const averagePrice = trimmedPrices.length
+    ? Math.round(trimmedPrices.reduce((s, p) => s + p, 0) / trimmedPrices.length)
     : null;
 
   return {
     make,
     model,
     year,
+    engineSizeCc,
+    mileage,
     listings,
     prices,
     averagePrice,
     lowestPrice: prices.length ? prices[0] : null,
     highestPrice: prices.length ? prices[prices.length - 1] : null,
+    autotraderUrl,
     fetchedAt: new Date().toISOString(),
   };
 }
