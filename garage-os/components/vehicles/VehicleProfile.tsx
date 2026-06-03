@@ -654,7 +654,15 @@ function ComplianceTab({ motRecords, insurance, taxRecords, onAddMot, onAddIns, 
 
 // ─── Maintenance Tab ──────────────────────────────────────
 function MaintenanceTab({ records, onAdd, vehicleId, onRefresh }: any) {
+  const supabase = createClient();
   const totalCost = records.reduce((s: number, r: MaintenanceRecord) => s + (r.total_cost || 0), 0);
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this service record? This cannot be undone.')) return;
+    await supabase.from('maintenance_records').delete().eq('id', id);
+    onRefresh();
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -671,10 +679,10 @@ function MaintenanceTab({ records, onAdd, vehicleId, onRefresh }: any) {
       ) : (
         <div className="space-y-3">
           {records.map((m: MaintenanceRecord) => (
-            <div key={m.id} className="glass-card rounded-xl p-5">
+            <div key={m.id} className="glass-card rounded-xl p-5 group">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-1">
+                  <div className="flex items-center gap-3 mb-1 flex-wrap">
                     <span className="text-xs bg-amber-DEFAULT/10 text-amber-DEFAULT px-2 py-0.5 rounded font-medium">
                       {SERVICE_TYPE_LABELS[m.service_type]}
                     </span>
@@ -683,19 +691,28 @@ function MaintenanceTab({ records, onAdd, vehicleId, onRefresh }: any) {
                   </div>
                   <h4 className="text-chrome-bright font-medium mb-1">{m.title}</h4>
                   {m.description && <p className="text-sm text-chrome-dim">{m.description}</p>}
-                  <div className="flex gap-4 mt-2 text-xs text-chrome-dim">
+                  <div className="flex gap-4 mt-2 text-xs text-chrome-dim flex-wrap">
                     {m.workshop && <span>🔧 {m.workshop}</span>}
                     {m.next_service_date && <span>Next: {formatDate(m.next_service_date)}</span>}
                     {m.invoice_number && <span className="font-mono">#{m.invoice_number}</span>}
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <div className="font-display text-lg text-chrome-bright">{formatCurrency(m.total_cost)}</div>
-                  {(m.labour_cost > 0 || m.parts_cost > 0) && (
-                    <div className="text-xs text-chrome-dim mt-1">
-                      L: {formatCurrency(m.labour_cost)} / P: {formatCurrency(m.parts_cost)}
-                    </div>
-                  )}
+                <div className="flex items-start gap-3 shrink-0">
+                  <div className="text-right">
+                    <div className="font-display text-lg text-chrome-bright">{formatCurrency(m.total_cost)}</div>
+                    {(m.labour_cost > 0 || m.parts_cost > 0) && (
+                      <div className="text-xs text-chrome-dim mt-1">
+                        L: {formatCurrency(m.labour_cost)} / P: {formatCurrency(m.parts_cost)}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleDelete(m.id)}
+                    className="w-8 h-8 rounded-lg btn-ghost flex items-center justify-center text-chrome-muted hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 mt-0.5"
+                    title="Delete record"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             </div>
