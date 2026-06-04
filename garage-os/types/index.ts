@@ -96,6 +96,18 @@ export interface Vehicle {
   location_address?: string;
   location_lat?: number;
   location_lng?: number;
+  // Extended performance specs
+  zero_to_sixty?: number;
+  top_speed_mph?: number;
+  kerb_weight_kg?: number;
+  body_style?: string;
+  seats?: number;
+  cylinders?: number;
+  co2_gkm?: number;
+  wheelbase_mm?: number;
+  length_mm?: number;
+  width_mm?: number;
+  height_mm?: number;
   created_at: string;
   updated_at: string;
 }

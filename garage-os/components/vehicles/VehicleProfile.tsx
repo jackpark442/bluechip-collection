@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   Car, Shield, FileText, Wrench, Camera, TrendingUp, Bell,
   Edit2, Trash2, ChevronLeft, Plus, ExternalLink, Download,
-  CheckCircle, AlertTriangle, AlertCircle, Clock, MapPin, Key, ClipboardList, RefreshCw, Loader2
+  CheckCircle, AlertTriangle, AlertCircle, Clock, MapPin, Key, ClipboardList, RefreshCw, Loader2, Zap
 } from 'lucide-react';
 import type {
   Vehicle, VehicleImage, MotRecord, InsurancePolicy, VehicleTax,
@@ -284,31 +284,129 @@ function OverviewTab({ vehicle: v, reminders, vehicleKeys, motRecords, onRefresh
   onAddKey: () => void;
   onEditKey: (k: VehicleKey) => void;
 }) {
-  const specs = [
-    { label: 'Engine', value: v.engine_size_cc ? `${(v.engine_size_cc / 1000).toFixed(1)}L` : null },
-    { label: 'Power', value: v.horsepower ? `${v.horsepower} hp` : null },
-    { label: 'Torque', value: v.torque_nm ? `${v.torque_nm} Nm` : null },
+  const [fetchingSpecs, setFetchingSpecs] = useState(false);
+  const [specsMsg, setSpecsMsg] = useState('');
+  const supabaseClient = createClient();
+
+  async function handleFetchSpecs() {
+    setFetchingSpecs(true);
+    setSpecsMsg('');
+    try {
+      const res = await fetch(`/api/specs/lookup?make=${encodeURIComponent(v.make)}&model=${encodeURIComponent(v.model)}&year=${v.year}`);
+      if (!res.ok) { setSpecsMsg('No specs found — try editing manually.'); return; }
+      const specs = await res.json();
+
+      // Save to DB
+      const update: Record<string, any> = {};
+      if (specs.zero_to_sixty  && !v.zero_to_sixty)  update.zero_to_sixty  = specs.zero_to_sixty;
+      if (specs.top_speed_mph  && !v.top_speed_mph)  update.top_speed_mph  = specs.top_speed_mph;
+      if (specs.kerb_weight_kg && !v.kerb_weight_kg) update.kerb_weight_kg = specs.kerb_weight_kg;
+      if (specs.body_style     && !v.body_style)     update.body_style     = specs.body_style;
+      if (specs.seats          && !v.seats)          update.seats          = specs.seats;
+      if (specs.cylinders      && !v.cylinders)      update.cylinders      = specs.cylinders;
+      if (specs.wheelbase_mm   && !v.wheelbase_mm)   update.wheelbase_mm   = specs.wheelbase_mm;
+      if (specs.length_mm      && !v.length_mm)      update.length_mm      = specs.length_mm;
+      if (specs.width_mm       && !v.width_mm)       update.width_mm       = specs.width_mm;
+      if (specs.height_mm      && !v.height_mm)      update.height_mm      = specs.height_mm;
+
+      if (Object.keys(update).length === 0) { setSpecsMsg('All specs already filled in.'); return; }
+
+      await supabaseClient.from('vehicles').update(update).eq('id', v.id);
+      setSpecsMsg(`Filled in ${Object.keys(update).length} spec${Object.keys(update).length > 1 ? 's' : ''}. Refreshing…`);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch {
+      setSpecsMsg('Fetch failed — try again.');
+    } finally {
+      setFetchingSpecs(false);
+    }
+  }
+
+  const coreSpecs = [
+    { label: 'Engine',       value: v.engine_size_cc ? `${(v.engine_size_cc / 1000).toFixed(1)}L${v.cylinders ? ` ${v.cylinders}-cyl` : ''}` : v.cylinders ? `${v.cylinders}-cyl` : null },
+    { label: 'Power',        value: v.horsepower ? `${v.horsepower} hp` : null },
+    { label: 'Torque',       value: v.torque_nm ? `${v.torque_nm} Nm` : null },
     { label: 'Transmission', value: v.transmission },
-    { label: 'Drive', value: v.drive_type },
-    { label: 'Fuel', value: v.fuel_type?.replace('_', ' ') },
-    { label: 'Colour', value: v.colour },
-    { label: 'VIN', value: v.vin },
+    { label: 'Drive',        value: v.drive_type },
+    { label: 'Fuel',         value: v.fuel_type?.replace('_', ' ') },
+    { label: 'Body Style',   value: v.body_style },
+    { label: 'Seats',        value: v.seats ? `${v.seats}` : null },
+    { label: 'Colour',       value: v.colour },
+    { label: 'VIN',          value: v.vin },
+  ].filter(s => s.value);
+
+  const perfSpecs = [
+    { label: '0–60 mph',     value: v.zero_to_sixty ? `${v.zero_to_sixty}s` : null },
+    { label: 'Top Speed',    value: v.top_speed_mph ? `${v.top_speed_mph} mph` : null },
+    { label: 'Kerb Weight',  value: v.kerb_weight_kg ? `${v.kerb_weight_kg.toLocaleString()} kg` : null },
+    { label: 'CO₂',          value: v.co2_gkm ? `${v.co2_gkm} g/km` : null },
+  ].filter(s => s.value);
+
+  const dimsSpecs = [
+    { label: 'Wheelbase', value: v.wheelbase_mm ? `${v.wheelbase_mm.toLocaleString()} mm` : null },
+    { label: 'Length',    value: v.length_mm ? `${v.length_mm.toLocaleString()} mm` : null },
+    { label: 'Width',     value: v.width_mm ? `${v.width_mm.toLocaleString()} mm` : null },
+    { label: 'Height',    value: v.height_mm ? `${v.height_mm.toLocaleString()} mm` : null },
   ].filter(s => s.value);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div className="glass-card rounded-xl p-6">
-        <h3 className="font-display text-lg text-chrome-bright mb-5">Technical Specifications</h3>
-        {specs.length === 0 ? (
-          <p className="text-chrome-dim text-sm">No specifications recorded</p>
-        ) : (
-          <div className="space-y-3">
-            {specs.map(({ label, value }) => (
-              <div key={label} className="flex items-center justify-between py-2 border-b border-white/4 last:border-0">
-                <span className="text-sm text-chrome-dim">{label}</span>
-                <span className="text-sm text-chrome-bright font-mono">{value}</span>
-              </div>
-            ))}
+      <div className="space-y-5">
+        {/* Core specs */}
+        <div className="glass-card rounded-xl p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-display text-lg text-chrome-bright">Technical Specifications</h3>
+            <button
+              onClick={handleFetchSpecs}
+              disabled={fetchingSpecs}
+              title="Auto-fetch specs from CarQuery database"
+              className="flex items-center gap-1.5 text-xs text-amber-DEFAULT hover:text-amber-light disabled:opacity-50 transition-colors"
+            >
+              {fetchingSpecs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              {fetchingSpecs ? 'Fetching…' : 'Auto-fetch'}
+            </button>
+          </div>
+          {specsMsg && <p className="text-xs text-amber-400 mb-3">{specsMsg}</p>}
+          {coreSpecs.length === 0 ? (
+            <p className="text-chrome-dim text-sm">No specifications recorded — click Auto-fetch or edit the vehicle.</p>
+          ) : (
+            <div className="space-y-0">
+              {coreSpecs.map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between py-2 border-b border-white/4 last:border-0">
+                  <span className="text-sm text-chrome-dim">{label}</span>
+                  <span className="text-sm text-chrome-bright font-mono">{value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Performance stats */}
+        {perfSpecs.length > 0 && (
+          <div className="glass-card rounded-xl p-6">
+            <h3 className="font-display text-base text-chrome-bright mb-4">Performance</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {perfSpecs.map(({ label, value }) => (
+                <div key={label} className="bg-white/3 rounded-lg p-3 text-center">
+                  <div className="font-display text-lg text-amber-DEFAULT">{value}</div>
+                  <div className="text-[10px] text-chrome-muted uppercase tracking-wider mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Dimensions */}
+        {dimsSpecs.length > 0 && (
+          <div className="glass-card rounded-xl p-6">
+            <h3 className="font-display text-base text-chrome-bright mb-4">Dimensions</h3>
+            <div className="space-y-0">
+              {dimsSpecs.map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between py-2 border-b border-white/4 last:border-0">
+                  <span className="text-sm text-chrome-dim">{label}</span>
+                  <span className="text-sm text-chrome-bright font-mono">{value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

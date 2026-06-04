@@ -60,6 +60,17 @@ export default function VehicleForm({ mode, vehicle }: Props) {
   const [transmission, setTransmission] = useState(vehicle?.transmission ?? '');
   const [driveType, setDriveType] = useState(vehicle?.drive_type ?? '');
   const [mileage, setMileage] = useState(vehicle?.mileage?.toString() ?? '0');
+  const [zeroToSixty, setZeroToSixty] = useState(vehicle?.zero_to_sixty?.toString() ?? '');
+  const [topSpeedMph, setTopSpeedMph] = useState(vehicle?.top_speed_mph?.toString() ?? '');
+  const [kerbWeightKg, setKerbWeightKg] = useState(vehicle?.kerb_weight_kg?.toString() ?? '');
+  const [bodyStyle, setBodyStyle] = useState(vehicle?.body_style ?? '');
+  const [seats, setSeats] = useState(vehicle?.seats?.toString() ?? '');
+  const [cylinders, setCylinders] = useState(vehicle?.cylinders?.toString() ?? '');
+  const [co2Gkm, setCo2Gkm] = useState(vehicle?.co2_gkm?.toString() ?? '');
+  const [wheelbaseMm, setWheelbaseMm] = useState(vehicle?.wheelbase_mm?.toString() ?? '');
+  const [lengthMm, setLengthMm] = useState(vehicle?.length_mm?.toString() ?? '');
+  const [widthMm, setWidthMm] = useState(vehicle?.width_mm?.toString() ?? '');
+  const [heightMm, setHeightMm] = useState(vehicle?.height_mm?.toString() ?? '');
   const [purchasePrice, setPurchasePrice] = useState(vehicle?.purchase_price?.toString() ?? '');
   const [purchaseDate, setPurchaseDate] = useState(vehicle?.purchase_date ?? '');
   const [currentValue, setCurrentValue] = useState(vehicle?.current_value?.toString() ?? '');
@@ -165,6 +176,17 @@ export default function VehicleForm({ mode, vehicle }: Props) {
       transmission: transmission.trim() || null,
       drive_type: driveType.trim() || null,
       mileage: parseInt(mileage) || 0,
+      zero_to_sixty: zeroToSixty ? parseFloat(zeroToSixty) : null,
+      top_speed_mph: topSpeedMph ? parseInt(topSpeedMph) : null,
+      kerb_weight_kg: kerbWeightKg ? parseInt(kerbWeightKg) : null,
+      body_style: bodyStyle.trim() || null,
+      seats: seats ? parseInt(seats) : null,
+      cylinders: cylinders ? parseInt(cylinders) : null,
+      co2_gkm: co2Gkm ? parseInt(co2Gkm) : null,
+      wheelbase_mm: wheelbaseMm ? parseInt(wheelbaseMm) : null,
+      length_mm: lengthMm ? parseInt(lengthMm) : null,
+      width_mm: widthMm ? parseInt(widthMm) : null,
+      height_mm: heightMm ? parseInt(heightMm) : null,
       purchase_price: purchasePrice ? parseFloat(purchasePrice) : null,
       purchase_date: purchaseDate || null,
       current_value: currentValue ? parseFloat(currentValue) : null,
@@ -427,6 +449,9 @@ export default function VehicleForm({ mode, vehicle }: Props) {
             <Field label="Engine Size (cc)">
               <input type="number" value={engineSizeCc} onChange={e => setEngineSizeCc(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 3902" />
             </Field>
+            <Field label="Cylinders">
+              <input type="number" value={cylinders} onChange={e => setCylinders(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 8" />
+            </Field>
             <Field label="Horsepower (hp)">
               <input type="number" value={horsepower} onChange={e => setHorsepower(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 710" />
             </Field>
@@ -439,6 +464,48 @@ export default function VehicleForm({ mode, vehicle }: Props) {
             <Field label="Drive Type">
               <input value={driveType} onChange={e => setDriveType(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. RWD, AWD, 4WD" />
             </Field>
+            <Field label="Body Style">
+              <input value={bodyStyle} onChange={e => setBodyStyle(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Coupe, Roadster" />
+            </Field>
+            <Field label="Seats">
+              <input type="number" value={seats} onChange={e => setSeats(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 2" min={1} max={9} />
+            </Field>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-white/5">
+            <p className="text-xs text-chrome-muted uppercase tracking-wider mb-3">Performance</p>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="0–60 mph (seconds)">
+                <input type="number" value={zeroToSixty} onChange={e => setZeroToSixty(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 3.4" step="0.1" min={0} />
+              </Field>
+              <Field label="Top Speed (mph)">
+                <input type="number" value={topSpeedMph} onChange={e => setTopSpeedMph(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 205" />
+              </Field>
+              <Field label="Kerb Weight (kg)">
+                <input type="number" value={kerbWeightKg} onChange={e => setKerbWeightKg(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 1485" />
+              </Field>
+              <Field label="CO₂ Emissions (g/km)">
+                <input type="number" value={co2Gkm} onChange={e => setCo2Gkm(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 285" />
+              </Field>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-white/5">
+            <p className="text-xs text-chrome-muted uppercase tracking-wider mb-3">Dimensions</p>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Wheelbase (mm)">
+                <input type="number" value={wheelbaseMm} onChange={e => setWheelbaseMm(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 2650" />
+              </Field>
+              <Field label="Length (mm)">
+                <input type="number" value={lengthMm} onChange={e => setLengthMm(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 4500" />
+              </Field>
+              <Field label="Width (mm)">
+                <input type="number" value={widthMm} onChange={e => setWidthMm(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 1950" />
+              </Field>
+              <Field label="Height (mm)">
+                <input type="number" value={heightMm} onChange={e => setHeightMm(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 1140" />
+              </Field>
+            </div>
           </div>
         </FormSection>
 
