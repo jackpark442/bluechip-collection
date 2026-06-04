@@ -53,10 +53,20 @@ export default function DashboardClient({ fleet, reminders, recentMaintenance, y
       }));
   }, [fleet]);
 
-  const urgentReminders = reminders.filter(r => {
-    const days = daysUntil(r.due_date);
-    return days !== null && days <= 30;
-  });
+  const urgentReminders = useMemo(() => {
+    const filtered = reminders.filter(r => {
+      const days = daysUntil(r.due_date);
+      return days !== null && days <= 30;
+    });
+    // Deduplicate: keep only the most urgent reminder per vehicle+title combo
+    const seen = new Set<string>();
+    return filtered.filter(r => {
+      const key = `${r.vehicle_id ?? ''}-${r.title?.toLowerCase().trim()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [reminders]);
 
   const gainLoss = stats.totalValue - stats.totalPurchase;
   const gainLossPct = stats.totalPurchase > 0 ? ((gainLoss / stats.totalPurchase) * 100).toFixed(1) : null;
