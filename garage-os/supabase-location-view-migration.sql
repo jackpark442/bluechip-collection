@@ -1,7 +1,8 @@
 -- Add location fields to fleet_overview view
 -- Run this in Supabase SQL Editor
 
-CREATE OR REPLACE VIEW fleet_overview AS
+DROP VIEW IF EXISTS fleet_overview;
+CREATE VIEW fleet_overview AS
 SELECT
   v.id,
   v.owner_id,
