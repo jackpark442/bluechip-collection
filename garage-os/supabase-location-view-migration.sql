@@ -1,8 +1,7 @@
 -- Add location fields to fleet_overview view
 -- Run this in Supabase SQL Editor
 
-DROP VIEW IF EXISTS fleet_overview;
-CREATE VIEW fleet_overview AS
+CREATE OR REPLACE VIEW fleet_overview AS
 SELECT
   v.id,
   v.owner_id,
@@ -17,13 +16,6 @@ SELECT
   v.current_value,
   v.cover_image_url,
   v.first_mot_due_date,
-  v.purchase_price,
-
-  -- Location
-  v.location_name,
-  v.location_address,
-  v.location_lat,
-  v.location_lng,
 
   -- Latest MOT
   COALESCE(mot.expiry_date, v.first_mot_due_date) AS mot_expiry,
@@ -43,7 +35,14 @@ SELECT
     COALESCE(mot.expiry_date, v.first_mot_due_date) - CURRENT_DATE,
     ins.end_date - CURRENT_DATE,
     CASE WHEN tax.is_exempt THEN 9999 ELSE tax.end_date - CURRENT_DATE END
-  ) AS days_to_nearest_expiry
+  ) AS days_to_nearest_expiry,
+
+  -- Location (appended)
+  v.purchase_price,
+  v.location_name,
+  v.location_address,
+  v.location_lat,
+  v.location_lng
 
 FROM vehicles v
 LEFT JOIN LATERAL (
