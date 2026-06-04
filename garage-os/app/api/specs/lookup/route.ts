@@ -11,6 +11,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'make, model and year are required' }, { status: 400 });
   }
 
+  if (!process.env.APININJAS_KEY) {
+    return NextResponse.json({ error: 'APININJAS_KEY not configured' }, { status: 503 });
+  }
+
   const specs = await fetchCarQuerySpecs(make, model, year);
   if (!specs) {
     return NextResponse.json({ error: 'No specs found for this vehicle' }, { status: 404 });

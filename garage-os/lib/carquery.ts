@@ -1,47 +1,39 @@
 /**
- * CarQuery API — free, no key required
- * https://www.carqueryapi.com/documentation/api-usage/
- * Returns performance specs by make / model / year.
+ * Car specs lookup via API Ninjas (https://api-ninjas.com/api/cars)
+ * Free tier: 10,000 requests/month — sign up at api-ninjas.com for a key.
+ * Set APININJAS_KEY in your .env.local and Vercel environment variables.
+ *
+ * Returns: cylinders, displacement, drive, fuel_type, transmission, body class.
+ * Note: 0-60 / top speed / weight are not available from this API — enter manually.
  */
 
 export interface CarQuerySpecs {
-  zero_to_sixty?: number;    // seconds
-  top_speed_mph?: number;
-  kerb_weight_kg?: number;
+  cylinders?: number;
   body_style?: string;
   seats?: number;
-  cylinders?: number;
+  zero_to_sixty?: number;
+  top_speed_mph?: number;
+  kerb_weight_kg?: number;
   wheelbase_mm?: number;
   length_mm?: number;
   width_mm?: number;
   height_mm?: number;
-  source: 'carquery';
+  source: 'api-ninjas';
 }
 
-interface CarQueryTrim {
-  model_0_to_60_mph?: string;
-  model_top_speed_mph?: string;
-  model_weight_kg?: string;
-  model_body?: string;
-  model_seats?: string;
-  model_engine_cyl?: string;
-  model_wheelbase_mm?: string;
-  model_length_mm?: string;
-  model_width_mm?: string;
-  model_height_mm?: string;
-  model_year?: string;
-  model_trim?: string;
-}
-
-function num(val?: string): number | undefined {
-  if (!val) return undefined;
-  const n = parseFloat(val);
-  return isNaN(n) || n === 0 ? undefined : n;
-}
-
-function intNum(val?: string): number | undefined {
-  const n = num(val);
-  return n !== undefined ? Math.round(n) : undefined;
+interface ApiNinjasCar {
+  cylinders?: number;
+  class?: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  drive?: string;
+  transmission?: string;
+  fuel_type?: string;
+  city_mpg?: number;
+  highway_mpg?: number;
+  combination_mpg?: number;
+  displacement?: number;
 }
 
 export async function fetchCarQuerySpecs(
@@ -49,40 +41,27 @@ export async function fetchCarQuerySpecs(
   model: string,
   year: number
 ): Promise<CarQuerySpecs | null> {
+  const apiKey = process.env.APININJAS_KEY;
+  if (!apiKey) return null;
+
   try {
-    const url = `https://www.carqueryapi.com/api/0.3/?cmd=getTrims&make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&year=${year}&full_results=1`;
+    const url = `https://api.api-ninjas.com/v1/cars?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&year=${year}&limit=1`;
     const res = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
+      headers: { 'X-Api-Key': apiKey },
       next: { revalidate: 86400 },
     });
 
     if (!res.ok) return null;
 
-    const data = await res.json();
-    const trims: CarQueryTrim[] = data?.Trims ?? [];
-    if (trims.length === 0) return null;
+    const data: ApiNinjasCar[] = await res.json();
+    if (!data?.length) return null;
 
-    // Prefer a trim with the most data filled in
-    const scored = trims.map(t => ({
-      t,
-      score: [t.model_0_to_60_mph, t.model_top_speed_mph, t.model_weight_kg,
-              t.model_wheelbase_mm, t.model_length_mm].filter(v => v && v !== '0').length,
-    })).sort((a, b) => b.score - a.score);
-
-    const best = scored[0].t;
+    const car = data[0];
 
     return {
-      zero_to_sixty: num(best.model_0_to_60_mph),
-      top_speed_mph: intNum(best.model_top_speed_mph),
-      kerb_weight_kg: intNum(best.model_weight_kg),
-      body_style: best.model_body || undefined,
-      seats: intNum(best.model_seats),
-      cylinders: intNum(best.model_engine_cyl),
-      wheelbase_mm: intNum(best.model_wheelbase_mm),
-      length_mm: intNum(best.model_length_mm),
-      width_mm: intNum(best.model_width_mm),
-      height_mm: intNum(best.model_height_mm),
-      source: 'carquery',
+      cylinders: car.cylinders ?? undefined,
+      body_style: car.class ?? undefined,
+      source: 'api-ninjas',
     };
   } catch {
     return null;

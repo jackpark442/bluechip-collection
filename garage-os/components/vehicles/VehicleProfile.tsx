@@ -309,6 +309,7 @@ function OverviewTab({ vehicle: v, reminders, vehicleKeys, motRecords, onRefresh
       if (specs.width_mm       && !v.width_mm)       update.width_mm       = specs.width_mm;
       if (specs.height_mm      && !v.height_mm)      update.height_mm      = specs.height_mm;
 
+      if (res.status === 503) { setSpecsMsg('API key not set — add APININJAS_KEY to Vercel env vars.'); return; }
       if (Object.keys(update).length === 0) { setSpecsMsg('All specs already filled in.'); return; }
 
       await supabaseClient.from('vehicles').update(update).eq('id', v.id);
