@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Search, Loader2, CheckCircle, AlertTriangle, ChevronLeft, Save, Info } from 'lucide-react';
 import type { Vehicle, VehicleCategory, VehicleStatus, FuelType } from '@/types';
-import { CATEGORY_LABELS, STATUS_LABELS } from '@/lib/utils';
+import { CATEGORY_LABELS, STATUS_LABELS, getVehicleClass } from '@/lib/utils';
 import Link from 'next/link';
 
 interface Props {
@@ -23,7 +23,9 @@ const FUEL_TYPES: { value: FuelType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
-const ALL_CATEGORIES = Object.entries(CATEGORY_LABELS) as [VehicleCategory, string][];
+const ROAD_CATEGORIES: VehicleCategory[] = ['supercar','sports_car','classic_car','luxury_saloon','suv','motorhome','campervan','motorcycle','van','pickup_truck','other'];
+const NON_ROAD_CATEGORIES: VehicleCategory[] = ['trailer','pushbike','lawnmower','plant_equipment','quad_bike'];
+const COMMERCIAL_CATEGORIES: VehicleCategory[] = ['hgv'];
 const ALL_STATUSES = Object.entries(STATUS_LABELS) as [VehicleStatus, string][];
 
 type DvsaLookupState =
@@ -76,6 +78,8 @@ export default function VehicleForm({ mode, vehicle }: Props) {
   const [currentValue, setCurrentValue] = useState(vehicle?.current_value?.toString() ?? '');
   const [notes, setNotes] = useState(vehicle?.notes ?? '');
   const [firstMotDueDate, setFirstMotDueDate] = useState(vehicle?.first_mot_due_date ?? '');
+
+  const vehicleClass = getVehicleClass(category);
 
   // ── DVSA lookup ─────────────────────────────────────────────────────────────
   async function handleDvsaLookup() {
@@ -265,6 +269,38 @@ export default function VehicleForm({ mode, vehicle }: Props) {
       }
     }
 
+    // Auto-create reminder templates for commercial vehicles on first add
+    if (mode === 'create' && vehicleClass === 'commercial') {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+      const nextYear = `${yyyy + 1}-${mm}-${dd}`;
+      const in2Years = `${yyyy + 2}-${mm}-${dd}`;
+      const in5Years = `${yyyy + 5}-${mm}-${dd}`;
+
+      const commercialReminders = [
+        { type: 'mot_due',  title: 'HGV Annual MOT Due',              due_date: nextYear,  description: 'Heavy goods vehicles require an annual MOT.' },
+        { type: 'custom',   title: 'Tachograph Calibration Due',       due_date: in2Years,  description: 'Tachographs must be calibrated every 2 years.' },
+        { type: 'custom',   title: 'Driver CPC Renewal',               due_date: in5Years,  description: 'Driver Certificate of Professional Competence — 35 hours periodic training every 5 years.' },
+        { type: 'custom',   title: 'Operator Licence Review',          due_date: nextYear,  description: 'Review operator licence compliance and documentation annually.' },
+        { type: 'service_due', title: 'Annual Safety Inspection',      due_date: nextYear,  description: '6-weekly or annual safety inspection as required by DVSA.' },
+      ];
+
+      try {
+        await supabase.from('reminders').insert(
+          commercialReminders.map(r => ({
+            vehicle_id: vehicleId,
+            owner_id: user.id,
+            status: 'pending',
+            notify_days_before: [30, 14, 7],
+            ...r,
+          }))
+        );
+      } catch { /* non-fatal */ }
+    }
+
     router.push(`/vehicles/${vehicleId}`);
     router.refresh();
   }
@@ -286,8 +322,42 @@ export default function VehicleForm({ mode, vehicle }: Props) {
 
       <form onSubmit={handleSave} className="space-y-8">
 
-        {/* ── DVSA Lookup ───────────────────────────────────────────────────── */}
-        <div className="glass-card rounded-xl p-6">
+        {/* ── Classification first so class drives rest of form ─────────── */}
+        <FormSection title="Classification">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Category" required>
+              <select value={category} onChange={e => setCategory(e.target.value as VehicleCategory)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
+                <optgroup label="Road Vehicles">
+                  {ROAD_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
+                </optgroup>
+                <optgroup label="Non-Road">
+                  {NON_ROAD_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
+                </optgroup>
+                <optgroup label="Commercial">
+                  {COMMERCIAL_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
+                </optgroup>
+              </select>
+            </Field>
+            <Field label="Status" required>
+              <select value={status} onChange={e => setStatus(e.target.value as VehicleStatus)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
+                {ALL_STATUSES.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+              </select>
+            </Field>
+          </div>
+          {vehicleClass === 'non_road' && (
+            <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300">
+              Non-road vehicle — DVLA lookup, MOT, insurance and tax sections are hidden.
+            </div>
+          )}
+          {vehicleClass === 'commercial' && (
+            <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+              Commercial vehicle — HGV MOT, tachograph, operator licence and Driver CPC reminders will be created automatically.
+            </div>
+          )}
+        </FormSection>
+
+        {/* ── DVSA Lookup — road & commercial only ──────────────────────────── */}
+        {vehicleClass !== 'non_road' && <div className="glass-card rounded-xl p-6">
           <div className="flex items-start gap-3 mb-5">
             <div className="w-8 h-8 rounded-lg bg-amber-DEFAULT/10 flex items-center justify-center shrink-0 mt-0.5">
               <Search className="w-4 h-4 text-amber-DEFAULT" />
@@ -393,58 +463,59 @@ export default function VehicleForm({ mode, vehicle }: Props) {
               <span>Enter a UK registration and click Check — auto-fills make, colour, fuel type &amp; MOT expiry.</span>
             </div>
           )}
-        </div>
+        }
 
         {/* ── Identity ──────────────────────────────────────────────────────── */}
         <FormSection title="Vehicle Identity">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Make" required>
-              <input value={make} onChange={e => setMake(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Ferrari" required />
+              <input value={make} onChange={e => setMake(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder={vehicleClass === 'non_road' ? 'e.g. Ifor Williams' : 'e.g. Ferrari'} required />
             </Field>
             <Field label="Model" required>
-              <input value={model} onChange={e => setModel(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 488 Pista" required />
+              <input value={model} onChange={e => setModel(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder={vehicleClass === 'non_road' ? 'e.g. LM166' : 'e.g. 488 Pista'} required />
             </Field>
-            <Field label="Variant / Trim">
-              <input value={variant} onChange={e => setVariant(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Spider, Challenge" />
+            <Field label="Variant / Description">
+              <input value={variant} onChange={e => setVariant(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. flatbed, 16ft" />
             </Field>
             <Field label="Year" required>
               <input type="number" value={year} onChange={e => setYear(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="2019" min={1900} max={new Date().getFullYear() + 2} required />
             </Field>
-            <Field label="Colour">
-              <input value={colour} onChange={e => setColour(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Rosso Corsa" />
-            </Field>
-            <Field label="VIN">
-              <input value={vin} onChange={e => setVin(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm font-mono" placeholder="17-character VIN" maxLength={17} />
-            </Field>
+            {vehicleClass !== 'non_road' && (
+              <Field label="Colour">
+                <input value={colour} onChange={e => setColour(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Rosso Corsa" />
+              </Field>
+            )}
+            {vehicleClass !== 'non_road' && (
+              <Field label="VIN / Serial Number">
+                <input value={vin} onChange={e => setVin(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm font-mono" placeholder="17-character VIN" maxLength={17} />
+              </Field>
+            )}
+            {vehicleClass === 'non_road' && (
+              <Field label="Serial / Chassis Number">
+                <input value={vin} onChange={e => setVin(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm font-mono" placeholder="Serial or chassis number" />
+              </Field>
+            )}
           </div>
         </FormSection>
 
-        {/* ── Classification ────────────────────────────────────────────────── */}
-        <FormSection title="Classification">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Category" required>
-              <select value={category} onChange={e => setCategory(e.target.value as VehicleCategory)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
-                {ALL_CATEGORIES.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-              </select>
-            </Field>
-            <Field label="Status" required>
-              <select value={status} onChange={e => setStatus(e.target.value as VehicleStatus)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
-                {ALL_STATUSES.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-              </select>
-            </Field>
-            <Field label="Fuel Type">
-              <select value={fuelType} onChange={e => setFuelType(e.target.value as FuelType)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
-                {FUEL_TYPES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Current Mileage">
-              <input type="number" value={mileage} onChange={e => setMileage(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="0" min={0} />
-            </Field>
-          </div>
-        </FormSection>
+        {/* ── Road/commercial only fields ───────────────────────────────────── */}
+        {vehicleClass !== 'non_road' && (
+          <FormSection title="Registration &amp; Engine">
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Fuel Type">
+                <select value={fuelType} onChange={e => setFuelType(e.target.value as FuelType)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
+                  {FUEL_TYPES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Current Mileage">
+                <input type="number" value={mileage} onChange={e => setMileage(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="0" min={0} />
+              </Field>
+            </div>
+          </FormSection>
+        )}
 
-        {/* ── Technical ─────────────────────────────────────────────────────── */}
-        <FormSection title="Technical Specifications">
+        {/* ── Technical — road & commercial only ───────────────────────────── */}
+        {vehicleClass !== 'non_road' && <FormSection title="Technical Specifications">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Engine Size (cc)">
               <input type="number" value={engineSizeCc} onChange={e => setEngineSizeCc(e.target.value)} className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 3902" />
@@ -507,17 +578,18 @@ export default function VehicleForm({ mode, vehicle }: Props) {
               </Field>
             </div>
           </div>
-        </FormSection>
+        </FormSection>}
 
-        {/* ── Financial ─────────────────────────────────────────────────────── */}
-        {/* ── Compliance ────────────────────────────────────────────────────── */}
-        <FormSection title="Compliance">
-          <Field label="First MOT Due Date" hint="Auto-filled from DVLA — correct to exact date from V5C if needed">
-            <input type="date" value={firstMotDueDate} onChange={e => setFirstMotDueDate(e.target.value)}
-              className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" />
-          </Field>
-          <p className="text-xs text-chrome-muted mt-1">Only set this for vehicles with no MOT history yet. Leave blank for vehicles that already have an MOT.</p>
-        </FormSection>
+        {/* ── Compliance — road & commercial only ───────────────────────────── */}
+        {vehicleClass !== 'non_road' && (
+          <FormSection title="Compliance">
+            <Field label="First MOT Due Date" hint="Auto-filled from DVLA — correct to exact date from V5C if needed">
+              <input type="date" value={firstMotDueDate} onChange={e => setFirstMotDueDate(e.target.value)}
+                className="input-dark w-full rounded-lg px-3 py-2.5 text-sm" />
+            </Field>
+            <p className="text-xs text-chrome-muted mt-1">Only set this for vehicles with no MOT history yet. Leave blank for vehicles that already have an MOT.</p>
+          </FormSection>
+        )}
 
         <FormSection title="Financial">
           <div className="grid grid-cols-2 gap-4">

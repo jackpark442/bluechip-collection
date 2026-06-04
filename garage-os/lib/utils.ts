@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { differenceInDays, format, parseISO } from 'date-fns';
-import type { VehicleCategory, VehicleStatus, ReminderType, ServiceType, DocumentCategory } from '@/types';
+import type { VehicleCategory, VehicleClass, VehicleStatus, ReminderType, ServiceType, DocumentCategory } from '@/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -70,6 +70,7 @@ export function getExpiryBadgeColor(status: ReturnType<typeof getExpiryStatus>):
 }
 
 export const CATEGORY_LABELS: Record<VehicleCategory, string> = {
+  // Road vehicles
   supercar: 'Supercar',
   sports_car: 'Sports Car',
   classic_car: 'Classic Car',
@@ -80,9 +81,25 @@ export const CATEGORY_LABELS: Record<VehicleCategory, string> = {
   motorcycle: 'Motorcycle',
   van: 'Van',
   pickup_truck: 'Pickup Truck',
-  trailer: 'Trailer',
   other: 'Other',
+  // Non-road
+  trailer: 'Trailer',
+  pushbike: 'Pushbike',
+  lawnmower: 'Lawnmower',
+  plant_equipment: 'Plant Equipment',
+  quad_bike: 'Quad Bike',
+  // Commercial
+  hgv: 'HGV',
 };
+
+const NON_ROAD_CATEGORIES: VehicleCategory[] = ['trailer', 'pushbike', 'lawnmower', 'plant_equipment', 'quad_bike'];
+const COMMERCIAL_CATEGORIES: VehicleCategory[] = ['hgv'];
+
+export function getVehicleClass(category: VehicleCategory): VehicleClass {
+  if (NON_ROAD_CATEGORIES.includes(category)) return 'non_road';
+  if (COMMERCIAL_CATEGORIES.includes(category)) return 'commercial';
+  return 'road';
+}
 
 export const STATUS_LABELS: Record<VehicleStatus, string> = {
   active: 'Active',
@@ -169,5 +186,10 @@ export const CATEGORY_EMOJI: Record<VehicleCategory, string> = {
   van: '🚐',
   pickup_truck: '🛻',
   trailer: '🚛',
+  pushbike: '🚲',
+  lawnmower: '🌿',
+  plant_equipment: '🚜',
+  quad_bike: '🏍',
+  hgv: '🚚',
   other: '🚗',
 };

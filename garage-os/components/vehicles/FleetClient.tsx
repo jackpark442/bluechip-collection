@@ -29,7 +29,7 @@ function getTrafficLight(v: FleetOverview): 'red' | 'amber' | 'green' | 'none' {
 
 interface Props { fleet: FleetOverview[] }
 
-const ALL_CATEGORIES: VehicleCategory[] = ['supercar','sports_car','classic_car','luxury_saloon','suv','motorhome','campervan','motorcycle','van','pickup_truck','trailer','other'];
+const ALL_CATEGORIES: VehicleCategory[] = ['supercar','sports_car','classic_car','luxury_saloon','suv','motorhome','campervan','motorcycle','van','pickup_truck','other','trailer','pushbike','lawnmower','plant_equipment','quad_bike','hgv'];
 const ALL_STATUSES: VehicleStatus[] = ['active','stored','restoration','for_sale','sold','written_off'];
 
 export default function FleetClient({ fleet }: Props) {

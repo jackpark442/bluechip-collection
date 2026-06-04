@@ -5,7 +5,10 @@
 export type VehicleCategory =
   | 'supercar' | 'sports_car' | 'classic_car' | 'luxury_saloon'
   | 'suv' | 'motorhome' | 'campervan' | 'motorcycle' | 'van'
-  | 'pickup_truck' | 'trailer' | 'other';
+  | 'pickup_truck' | 'trailer' | 'other'
+  | 'pushbike' | 'lawnmower' | 'plant_equipment' | 'quad_bike' | 'hgv';
+
+export type VehicleClass = 'road' | 'non_road' | 'commercial';
 
 export type VehicleStatus = 'active' | 'stored' | 'restoration' | 'for_sale' | 'sold' | 'written_off';
 export type FuelType = 'petrol' | 'diesel' | 'electric' | 'hybrid' | 'lpg' | 'hydrogen' | 'other';

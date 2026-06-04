@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { getVehicleClass } from '@/lib/utils';
 import {
   Car, Shield, FileText, Wrench, Camera, TrendingUp, Bell,
   Edit2, Trash2, ChevronLeft, Plus, ExternalLink, Download,
@@ -147,24 +148,26 @@ export default function VehicleProfile(props: Props) {
         </div>
       </div>
 
-      {/* Compliance summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <ComplianceCard label="MOT" status={motStatus}
-          date={latestMot?.expiry_date ?? firstMotDue}
-          days={daysUntil(latestMot?.expiry_date ?? firstMotDue)}
-          onAdd={() => setShowAddMot(true)}
-          provider={latestMot?.test_centre ?? (firstMotDue ? 'First MOT due' : undefined)} />
-        <ComplianceCard label="Insurance" status={insStatus}
-          date={latestIns?.end_date} days={daysUntil(latestIns?.end_date)}
-          onAdd={() => setShowAddIns(true)} provider={latestIns?.provider} />
-        <ComplianceCard label="Vehicle Tax" status={taxStatus}
-          date={isSorn ? latestTax?.end_date : latestTax?.is_exempt ? undefined : latestTax?.end_date}
-          days={latestTax?.is_exempt && !isSorn ? null : daysUntil(latestTax?.end_date)}
-          onAdd={() => setShowAddTax(true)}
-          provider={isSorn ? 'SORN' : latestTax?.is_exempt ? 'Tax Exempt' : undefined}
-          exempt={latestTax?.is_exempt && !isSorn}
-          sorn={isSorn} />
-      </div>
+      {/* Compliance summary — road & commercial only */}
+      {getVehicleClass(vehicle.category) !== 'non_road' && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <ComplianceCard label={getVehicleClass(vehicle.category) === 'commercial' ? 'Annual MOT' : 'MOT'} status={motStatus}
+            date={latestMot?.expiry_date ?? firstMotDue}
+            days={daysUntil(latestMot?.expiry_date ?? firstMotDue)}
+            onAdd={() => setShowAddMot(true)}
+            provider={latestMot?.test_centre ?? (firstMotDue ? 'First MOT due' : undefined)} />
+          <ComplianceCard label="Insurance" status={insStatus}
+            date={latestIns?.end_date} days={daysUntil(latestIns?.end_date)}
+            onAdd={() => setShowAddIns(true)} provider={latestIns?.provider} />
+          <ComplianceCard label="Vehicle Tax" status={taxStatus}
+            date={isSorn ? latestTax?.end_date : latestTax?.is_exempt ? undefined : latestTax?.end_date}
+            days={latestTax?.is_exempt && !isSorn ? null : daysUntil(latestTax?.end_date)}
+            onAdd={() => setShowAddTax(true)}
+            provider={isSorn ? 'SORN' : latestTax?.is_exempt ? 'Tax Exempt' : undefined}
+            exempt={latestTax?.is_exempt && !isSorn}
+            sorn={isSorn} />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-white/5">
