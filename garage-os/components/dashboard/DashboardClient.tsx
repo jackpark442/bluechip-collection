@@ -58,10 +58,10 @@ export default function DashboardClient({ fleet, reminders, recentMaintenance, y
       const days = daysUntil(r.due_date);
       return days !== null && days <= 30;
     });
-    // Deduplicate: keep only the most urgent reminder per vehicle+title combo
+    // Deduplicate: keep only the most urgent reminder per vehicle+type combo
     const seen = new Set<string>();
     return filtered.filter(r => {
-      const key = `${r.vehicle_id ?? ''}-${r.title?.toLowerCase().trim()}`;
+      const key = `${r.vehicle_id ?? ''}-${r.type}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
