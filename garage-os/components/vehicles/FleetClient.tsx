@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, Grid, List, Search, Car } from 'lucide-react';
+import { Plus, Grid, List, Search, Car, MapPin } from 'lucide-react';
 import type { FleetOverview, VehicleCategory, VehicleStatus } from '@/types';
 import { formatCurrency, formatDate, daysUntil, CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS, getVehicleDisplayName } from '@/lib/utils';
 
@@ -38,6 +38,7 @@ export default function FleetClient({ fleet }: Props) {
   const [category, setCategory] = useState<VehicleCategory | 'all'>('all');
   const [status, setStatus] = useState<VehicleStatus | 'all'>('all');
   const [sortBy, setSortBy] = useState<'make' | 'year' | 'value' | 'compliance'>('make');
+  const [groupByLocation, setGroupByLocation] = useState(true);
 
   const filtered = useMemo(() => {
     let result = [...fleet];
@@ -65,6 +66,21 @@ export default function FleetClient({ fleet }: Props) {
     const used = new Set(fleet.map(v => v.category));
     return ALL_CATEGORIES.filter(c => used.has(c));
   }, [fleet]);
+
+  const locationGroups = useMemo(() => {
+    if (!groupByLocation) return null;
+    const groups: Record<string, FleetOverview[]> = {};
+    filtered.forEach(v => {
+      const key = v.location_name || v.location_address || 'Unassigned';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(v);
+    });
+    return Object.entries(groups).sort(([a], [b]) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b);
+    });
+  }, [filtered, groupByLocation]);
 
   return (
     <div className="space-y-6">
@@ -113,6 +129,15 @@ export default function FleetClient({ fleet }: Props) {
           <option value="compliance">Sort: Compliance</option>
         </select>
 
+        {/* Location grouping toggle */}
+        <button
+          onClick={() => setGroupByLocation(g => !g)}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition-colors ${groupByLocation ? 'bg-amber-DEFAULT/20 text-amber-DEFAULT border-amber-DEFAULT/30' : 'border-white/8 text-chrome-dim hover:text-chrome'}`}
+        >
+          <MapPin className="w-4 h-4" />
+          <span className="hidden sm:inline">By Location</span>
+        </button>
+
         {/* View toggle */}
         <div className="flex gap-1 border border-white/8 rounded-lg p-1">
           <button onClick={() => setView('grid')}
@@ -131,55 +156,80 @@ export default function FleetClient({ fleet }: Props) {
           <Car className="w-12 h-12 text-chrome-muted mx-auto mb-3 opacity-40" />
           <p className="text-chrome-dim">No vehicles match your filters</p>
         </div>
+      ) : locationGroups ? (
+        <div className="space-y-8">
+          {locationGroups.map(([location, vehicles]) => (
+            <div key={location}>
+              <div className="flex items-center gap-2 mb-4">
+                <MapPin className="w-4 h-4 text-amber-DEFAULT shrink-0" />
+                <h3 className="font-display text-base text-chrome-bright">{location}</h3>
+                <span className="text-xs text-chrome-dim ml-1">{vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''}</span>
+              </div>
+              {view === 'grid' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {vehicles.map(v => <VehicleGridCard key={v.id} vehicle={v} />)}
+                </div>
+              ) : (
+                <LocationListTable vehicles={vehicles} />
+              )}
+            </div>
+          ))}
+        </div>
       ) : view === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filtered.map(v => <VehicleGridCard key={v.id} vehicle={v} />)}
         </div>
       ) : (
-        <div className="glass-card rounded-xl overflow-x-auto">
-          <table className="w-full data-table min-w-[700px]">
-            <thead>
-              <tr>
-                <th className="text-left">Vehicle</th>
-                <th className="text-left">Registration</th>
-                <th className="text-left">Category</th>
-                <th className="text-left">Status</th>
-                <th className="text-right">MOT</th>
-                <th className="text-right">Insurance</th>
-                <th className="text-right">Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(v => (
-                <tr key={v.id} className="cursor-pointer" onClick={() => window.location.href = `/vehicles/${v.id}`}>
-                  <td>
-                    <div className="flex items-center gap-3">
-                      {(() => { const lc = TRAFFIC_LIGHT_COLORS[getTrafficLight(v)]; return <span title={lc.label} className={`w-2 h-2 rounded-full ${lc.dot} ring-1 ${lc.ring} shrink-0`} />; })()}
-                      {v.cover_image_url ? (
-                        <img src={v.cover_image_url} className="w-10 h-10 rounded-lg object-cover" alt="" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-obsidian-600 flex items-center justify-center">
-                          <Car className="w-5 h-5 text-chrome-muted opacity-40" />
-                        </div>
-                      )}
-                      <div>
-                        <div className="text-chrome-bright font-medium text-sm">{v.make} {v.model}</div>
-                        <div className="text-chrome-dim text-xs">{v.year}{v.variant ? ` · ${v.variant}` : ''}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span className="font-mono text-sm">{v.registration?.toUpperCase() || '—'}</span></td>
-                  <td><span className="text-sm">{CATEGORY_LABELS[v.category]}</span></td>
-                  <td><span className={`status-badge ${STATUS_COLORS[v.status]}`}>{STATUS_LABELS[v.status]}</span></td>
-                  <td className="text-right"><ExpiryCell date={v.mot_expiry} firstMot={!v.mot_result && !!v.first_mot_due_date} /></td>
-                  <td className="text-right"><ExpiryCell date={v.insurance_expiry} /></td>
-                  <td className="text-right font-mono text-sm">{formatCurrency(v.current_value)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <LocationListTable vehicles={filtered} />
       )}
+    </div>
+  );
+}
+
+function LocationListTable({ vehicles }: { vehicles: FleetOverview[] }) {
+  return (
+    <div className="glass-card rounded-xl overflow-x-auto">
+      <table className="w-full data-table min-w-[700px]">
+        <thead>
+          <tr>
+            <th className="text-left">Vehicle</th>
+            <th className="text-left">Registration</th>
+            <th className="text-left">Category</th>
+            <th className="text-left">Status</th>
+            <th className="text-right">MOT</th>
+            <th className="text-right">Insurance</th>
+            <th className="text-right">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {vehicles.map(v => (
+            <tr key={v.id} className="cursor-pointer" onClick={() => window.location.href = `/vehicles/${v.id}`}>
+              <td>
+                <div className="flex items-center gap-3">
+                  {(() => { const lc = TRAFFIC_LIGHT_COLORS[getTrafficLight(v)]; return <span title={lc.label} className={`w-2 h-2 rounded-full ${lc.dot} ring-1 ${lc.ring} shrink-0`} />; })()}
+                  {v.cover_image_url ? (
+                    <img src={v.cover_image_url} className="w-10 h-10 rounded-lg object-cover" alt="" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-obsidian-600 flex items-center justify-center">
+                      <Car className="w-5 h-5 text-chrome-muted opacity-40" />
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-chrome-bright font-medium text-sm">{v.make} {v.model}</div>
+                    <div className="text-chrome-dim text-xs">{v.year}{v.variant ? ` · ${v.variant}` : ''}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span className="font-mono text-sm">{v.registration?.toUpperCase() || '—'}</span></td>
+              <td><span className="text-sm">{CATEGORY_LABELS[v.category]}</span></td>
+              <td><span className={`status-badge ${STATUS_COLORS[v.status]}`}>{STATUS_LABELS[v.status]}</span></td>
+              <td className="text-right"><ExpiryCell date={v.mot_expiry} firstMot={!v.mot_result && !!v.first_mot_due_date} /></td>
+              <td className="text-right"><ExpiryCell date={v.insurance_expiry} /></td>
+              <td className="text-right font-mono text-sm">{formatCurrency(v.current_value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
