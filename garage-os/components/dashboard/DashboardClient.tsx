@@ -62,9 +62,9 @@ export default function DashboardClient({ fleet, reminders, recentMaintenance, y
   const gainLossPct = stats.totalPurchase > 0 ? ((gainLoss / stats.totalPurchase) * 100).toFixed(1) : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Hero stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
           label="Total Vehicles"
           value={stats.total.toString()}
@@ -253,15 +253,15 @@ function StatCard({ label, value, sub, icon, accent }: {
     red: 'text-red-400 bg-red-400/10',
   };
   return (
-    <div className="glass-card rounded-xl p-5 glass-card-hover">
-      <div className="flex items-start justify-between mb-4">
-        <span className="text-xs font-semibold tracking-[0.08em] uppercase text-chrome-dim">{label}</span>
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${accentClasses[accent]}`}>
+    <div className="glass-card rounded-xl p-4 sm:p-5 glass-card-hover">
+      <div className="flex items-start justify-between mb-3 sm:mb-4">
+        <span className="text-[10px] sm:text-xs font-semibold tracking-[0.08em] uppercase text-chrome-dim leading-tight">{label}</span>
+        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shrink-0 ml-1 ${accentClasses[accent]}`}>
           {icon}
         </div>
       </div>
-      <div className="font-display text-2xl text-chrome-bright mb-1">{value}</div>
-      <div className="text-xs text-chrome-dim">{sub}</div>
+      <div className="font-display text-xl sm:text-2xl text-chrome-bright mb-1 truncate">{value}</div>
+      <div className="text-[10px] sm:text-xs text-chrome-dim leading-tight line-clamp-2">{sub}</div>
     </div>
   );
 }
