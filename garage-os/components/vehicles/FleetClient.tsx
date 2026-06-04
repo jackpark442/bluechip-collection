@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, Grid, List, Search, Car, MapPin } from 'lucide-react';
+import { Plus, Grid, List, Search, Car, MapPin, Download } from 'lucide-react';
 import type { FleetOverview, VehicleCategory, VehicleStatus } from '@/types';
 import { formatCurrency, formatDate, daysUntil, CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS, getVehicleDisplayName } from '@/lib/utils';
 
@@ -39,6 +39,23 @@ export default function FleetClient({ fleet }: Props) {
   const [status, setStatus] = useState<VehicleStatus | 'all'>('all');
   const [sortBy, setSortBy] = useState<'make' | 'year' | 'value' | 'compliance'>('make');
   const [groupByLocation, setGroupByLocation] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExportGaps() {
+    setExporting(true);
+    try {
+      const res = await fetch('/api/export/gaps');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bluechip-gaps-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     let result = [...fleet];
@@ -89,9 +106,19 @@ export default function FleetClient({ fleet }: Props) {
         <div>
           <p className="text-chrome-dim text-sm mt-1">{fleet.length} vehicles · {filtered.length} shown</p>
         </div>
-        <Link href="/vehicles/new" className="btn-amber rounded-lg px-4 py-2.5 text-sm flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Add Vehicle
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportGaps}
+            disabled={exporting}
+            className="btn-ghost rounded-lg px-3 py-2.5 text-sm flex items-center gap-2 border border-white/8 hover:border-white/16 disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export Gaps'}</span>
+          </button>
+          <Link href="/vehicles/new" className="btn-amber rounded-lg px-4 py-2.5 text-sm flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Vehicle
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
