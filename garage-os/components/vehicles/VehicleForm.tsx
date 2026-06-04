@@ -463,7 +463,7 @@ export default function VehicleForm({ mode, vehicle }: Props) {
               <span>Enter a UK registration and click Check — auto-fills make, colour, fuel type &amp; MOT expiry.</span>
             </div>
           )}
-        }
+        </div>}
 
         {/* ── Identity ──────────────────────────────────────────────────────── */}
         <FormSection title="Vehicle Identity">
